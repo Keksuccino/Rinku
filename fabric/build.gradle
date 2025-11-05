@@ -87,6 +87,7 @@ dependencies {
     }
 
     implementation project(path: ':common', configuration: 'namedElements')
+
 }
 
 loom {
