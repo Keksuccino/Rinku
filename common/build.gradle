@@ -6,6 +6,9 @@ plugins {
 
 sourceCompatibility = JavaLanguageVersion.of(java_version as int)
 targetCompatibility = JavaLanguageVersion.of(java_version as int)
+archivesBaseName = mod_id
+version = mcef_version
+group = 'de.keksuccino'
 
 repositories {
     mavenCentral()
@@ -38,11 +41,15 @@ publishing {
     publications {
         mavenJava(MavenPublication) {
             from components.java
-            groupId = 'com.cinemamod'
+            groupId = project.group
             artifactId = 'mcef'
             version = mcef_version
         }
     }
+}
+
+java {
+    withSourcesJar()
 }
 
 dependencies {
@@ -73,6 +80,10 @@ processResources.dependsOn(processJcefResources)
 jar {
     from sourceSets.jcef.output.classesDirs
     from sourceSets.jcef.output.resourcesDir
+}
+
+tasks.named('sourcesJar', Jar).configure {
+    from(sourceSets.jcef.allSource)
 }
 
 idea {
