@@ -182,7 +182,7 @@ public final class MCEF {
     /**
      * Check if MCEF has been initialized, throws a {@link RuntimeException} if not.
      */
-    private static void assertInitialized() {
+    public static void assertInitialized() {
         if (!isInitialized())
             throw new RuntimeException("Chromium Embedded Framework was never initialized.");
     }
@@ -191,7 +191,6 @@ public final class MCEF {
      * Get the git commit hash of the java-cef code (either from MANIFEST.MF or from the git repo on-disk if in a
      * development environment). Used for downloading the java-cef release.
      * @return The git commit hash of java-cef
-     * @throws IOException
      */
     public static String getJavaCefCommit() throws IOException {
         // First check system property
