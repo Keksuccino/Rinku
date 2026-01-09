@@ -9,8 +9,6 @@ import net.minecraft.network.chat.Component;
 
 public class MCEFExampleMod {
 
-    private static final Minecraft MINECRAFT = Minecraft.getInstance();
-
     public static final KeyMapping KEY_MAPPING = new KeyMapping("Open Browser", InputConstants.KEY_F12, KeyMapping.Category.MISC);
 
     public MCEFExampleMod() {
@@ -20,9 +18,9 @@ public class MCEFExampleMod {
 
     public void onTick() {
         // Check if our key was pressed
-        if (KEY_MAPPING.isDown() && !(MINECRAFT.screen instanceof ExampleScreen)) {
+        if (KEY_MAPPING.isDown() && !(Minecraft.getInstance().screen instanceof ExampleScreen)) {
             //Display the web browser UI.
-            MINECRAFT.setScreen(new ExampleScreen(Component.literal("Example Screen")));
+            Minecraft.getInstance().setScreen(new ExampleScreen(Component.literal("Example Screen")));
         }
     }
 
