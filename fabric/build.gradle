@@ -73,7 +73,8 @@ processResources {
 publishing {
     publications {
         mavenJava(MavenPublication) {
-            artifactId base.archivesName.get()
+            artifactId "${mod_id}-fabric"
+            version "${mod_version}-${minecraft_version}"
             from components.java
             pom.withXml {
                 def deps = asNode().get('dependencies')

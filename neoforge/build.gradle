@@ -109,7 +109,8 @@ tasks.withType(ProcessResources).matching(notNeoTask).configureEach {
 publishing {
     publications {
         mavenJava(MavenPublication) {
-            artifactId base.archivesName.get()
+            artifactId "${mod_id}-neoforge"
+            version "${mod_version}-${minecraft_version}"
             from components.java
             pom.withXml {
                 def deps = asNode().get('dependencies')
