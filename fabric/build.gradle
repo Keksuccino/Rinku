@@ -1,223 +1,85 @@
+
 plugins {
-    id 'fabric-loom'
-    id 'com.matthewprenger.cursegradle' version "${cursegradle_version}"
-    id 'com.github.johnrengelman.shadow' version "${shadow_version}"
+    id 'java'
+    id 'idea'
     id 'maven-publish'
+    id "fabric-loom" version "$fabric_loom_version"
 }
 
-sourceCompatibility = JavaLanguageVersion.of(java_version as int)
-targetCompatibility = JavaLanguageVersion.of(java_version as int)
-
-var mod_version = mcef_version
-
-archivesBaseName = archives_base_name
-version = mod_version
-group = maven_group
-
-def fixedJarName = "mcef-1.0.0.jar"
-def fixedSourcesJarName = "mcef-1.0.0-sources.jar"
-def fixedNamedJarName = "mcef-1.0.0-named.jar"
-def fixedPomName = "mcef-1.0.0.pom"
-
-repositories {
-   mavenCentral()
-   maven { url = 'https://maven.fabricmc.net/' }
-   maven { url = 'https://oss.sonatype.org/content/repositories/snapshots' }
-   maven {
-      name = 'ParchmentMC'
-      url = 'https://maven.parchmentmc.org'
-   }
-   mavenLocal()
-}
-
-/*
-    Add the following to ~/.gradle/gradle.properties
-    systemProp.org.gradle.s3.endpoint=https://<the s3 endpoint>
-    MCEF_S3_PUBLISH_URL_SNAPSHOT=s3://<bucket>/repositories/snapshots
-    MCEF_S3_PUBLISH_URL_RELEASE=s3://<bucket>/repositories/releases
-    MCEF_S3_PUBLISH_ACCESS_KEY=<access key>
-    MCEF_S3_PUBLISH_SECRET_KEY=<secret key>
- */
-publishing {
-    repositories {
-        maven {
-            url ((mcef_version.toString().endsWith("SNAPSHOT")) ? findProperty('MCEF_S3_PUBLISH_URL_SNAPSHOT') : findProperty('MCEF_S3_PUBLISH_URL_RELEASE'))
-            credentials(AwsCredentials) {
-                accessKey = findProperty('MCEF_S3_PUBLISH_ACCESS_KEY')
-                secretKey = findProperty('MCEF_S3_PUBLISH_SECRET_KEY')
-            }
-        }
-    }
-    publications {
-        mavenJava(MavenPublication) {
-            from components.java
-            groupId = project.group
-            artifactId = 'mcef-fabric'
-            version = mcef_version
-            pom.packaging = 'jar'
-            pom.withXml {
-                def deps = asNode().get('dependencies')
-                if (deps instanceof List) {
-                    deps.each { asNode().remove(it) }
-                }
-            }
-        }
-    }
+base {
+    archivesName = "${mod_id}"
 }
 
 dependencies {
+
     minecraft "com.mojang:minecraft:${minecraft_version}"
     mappings loom.layered() {
         officialMojangMappings()
-        parchment("org.parchmentmc.data:parchment-1.21.9:2025.10.05@zip")
+        parchment("org.parchmentmc.data:parchment-${parchment_mc_version}:${parchment_version}@zip")
     }
     modImplementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${fabric_version}"
+    implementation group: 'com.google.code.findbugs', name: 'jsr305', version: '3.0.1'
+    implementation project(":common")
+    include(implementation(annotationProcessor("io.github.llamalad7:mixinextras-fabric:${mixin_extras_version}")))
+    modImplementation "maven.modrinth:modmenu:17.0.0-beta.1"
 
-    Set<String> apiModules = [
-            'fabric-api-base',
-            'fabric-command-api-v2',
-            'fabric-lifecycle-events-v1',
-            'fabric-networking-api-v1',
-            'fabric-resource-loader-v0',
-            'fabric-key-binding-api-v1'
-    ]
-
-    apiModules.forEach {
-        modImplementation(fabricApi.module(it, fabric_version))
-    }
-
-    implementation project(path: ':common', configuration: 'namedElements')
 }
 
 loom {
+    if (project(":common").file("src/main/resources/${mod_id}.accesswidener").exists()) {
+        accessWidenerPath.set(project(":common").file("src/main/resources/${mod_id}.accesswidener"))
+    }
     mixin {
-        defaultRefmapName = "mcef.refmap.json"
+        useLegacyMixinAp = true
+        defaultRefmapName.set("${mod_id}.refmap.json")
+    }
+    runs {
+        client {
+            client()
+            setConfigName("Fabric Client")
+            ideConfigGenerated(true)
+            runDir("run_client")
+        }
+        server {
+            server()
+            setConfigName("Fabric Server")
+            ideConfigGenerated(true)
+            runDir("run_server")
+        }
     }
 }
 
-tasks.register('generateJava', Copy) {
-    from project(':common').file('src/template/java')
-    into "${buildDir}/generated/java"
-    expand 'compatibility_version': mod_compatibility_version
+tasks.withType(JavaCompile).configureEach {
+    source(project(":common").sourceSets.main.allSource)
+    source(project(":common").sourceSets.jcef.allSource)
 }
-sourceSets.main.java {
-    srcDir "${buildDir}/generated/java"
+tasks.withType(Javadoc).configureEach {
+    source(project(":common").sourceSets.main.allJava)
 }
-compileJava.dependsOn generateJava
+tasks.withType(Test).configureEach {
+    // Allow builds when there are test sources but no matching tests.
+    failOnNoDiscoveredTests = false
+}
+tasks.named("sourcesJar", Jar) {
+    from(project(":common").sourceSets.main.allSource)
+    from(project(":common").sourceSets.jcef.allSource)
+}
 
 processResources {
-    filesMatching('fabric.mod.json') {
-        expand 'mod_id': mod_id,
-                'mod_name': mod_name,
-                'mod_vendor': mod_vendor,
-                'mod_version': mod_version,
-                'java_version': java_version,
-                'minecraft_dependency': minecraft_dependency,
-                'fabric_loader_version': fabric_loader_version,
-                'min_fabric_version': min_fabric_version
-    }
     from project(":common").sourceSets.main.resources
 }
 
-tasks.withType(JavaCompile).configureEach {
-    source(project(':common').sourceSets.main.allSource)
-    source(project(':common').sourceSets.jcef.allSource)
-}
-
-tasks.withType(JavaCompile).configureEach {
-    it.options.encoding = 'UTF-8'
-    it.options.release = java_version as int
-}
-
-java {
-    withSourcesJar()
-}
-
-tasks.named('remapJar') {
-    archiveFileName.set(fixedJarName)
-}
-
-tasks.named('remapSourcesJar') {
-    archiveFileName.set(fixedSourcesJarName)
-}
-
-def shadowJarTask = tasks.named('shadowJar')
-
-def namedJarOutput = layout.buildDirectory.file("libs/${fixedNamedJarName}")
-
-def namedJarTask = tasks.register('namedJar') {
-    group = 'build'
-    description = 'Produces the Yarn-named distribution jar.'
-    dependsOn(shadowJarTask)
-    inputs.file(shadowJarTask.flatMap { it.archiveFile })
-    outputs.file(namedJarOutput)
-    doLast {
-        copy {
-            from(shadowJarTask.get().archiveFile.get().asFile)
-            into(namedJarOutput.get().asFile.parentFile)
-            rename { fixedNamedJarName }
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            artifactId base.archivesName.get()
+            from components.java
         }
     }
-}
-
-def pomTask = tasks.named('generatePomFileForMavenJavaPublication') {
-    destination = layout.buildDirectory.file("libs/${fixedPomName}").get().asFile
-}
-
-tasks.named('sourcesJar', Jar).configure {
-    dependsOn generateJava
-    from(project(':common').sourceSets.main.allSource)
-    from(project(':common').sourceSets.jcef.allSource)
-}
-
-jar {
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    manifest {
-        attributes(['Specification-Title'     : mod_name,
-                    'Specification-Vendor'    : mod_vendor,
-                    'Specification-Version'   : "1",
-                    'Implementation-Title'    : mod_name,
-                    'Implementation-Version'  : mod_version,
-                    'Implementation-Vendor'   : mod_vendor,
-                    'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
-                    'java-cef-commit'         : project.parent.getCheckedOutGitCommitHash(project.parent)
-        ])
-    }
-    from('LICENSE') {
-        rename { "${it}_${archivesBaseName}" }
-    }
-}
-
-curseforge {
-    apiKey = file("${rootDir}/curseforge_api_key.txt").exists() ? file("${rootDir}/curseforge_api_key.txt").text.trim() : ''
-    project {
-        id = curse_id
-        releaseType = release_type
-        addGameVersion minecraft_version
-        addGameVersion 'Fabric'
-        addGameVersion "Java ${java_version}"
-        mainArtifact(file("${buildDir}/libs/${fixedJarName}")) {
-            displayName = "[FABRIC][${minecraft_version}] ${mod_name} ${mod_version}"
-        }
-        afterEvaluate {
-            uploadTask.dependsOn(remapJar)
+    repositories {
+        maven {
+            url "file://" + System.getenv("local_maven")
         }
     }
-    options {
-        forgeGradleIntegration = false
-    }
-}
-
-shadowJar {
-    configurations = [project.configurations.shadow]
-    archiveClassifier = 'shadow-dev'
-}
-
-remapJar {
-    dependsOn shadowJar
-    inputFile = shadowJar.archiveFile.get()
-}
-
-tasks.named('build') {
-    dependsOn(namedJarTask, pomTask)
 }
