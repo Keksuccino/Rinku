@@ -57,14 +57,14 @@ if errorlevel 1 (
 )
 popd
 
-for %%F in ("%FABRIC_LIB_DIR%\%FABRIC_BASE%-named.jar" "%FABRIC_LIB_DIR%\%FABRIC_BASE%-sources.jar" "%FABRIC_LIB_DIR%\%FABRIC_BASE%.pom") do (
+for %%F in ("%FABRIC_LIB_DIR%\%FABRIC_BASE%.jar" "%FABRIC_LIB_DIR%\%FABRIC_BASE%-sources.jar" "%PROJECT_DIR%fabric\build\publications\mavenJava\pom-default.xml") do (
     if not exist "%%~fF" (
         echo Missing Fabric artifact: %%~fF
         goto :finish
     )
 )
 
-for %%F in ("%NEOFORGE_LIB_DIR%\%NEOFORGE_BASE%.jar" "%NEOFORGE_LIB_DIR%\%NEOFORGE_BASE%-sources.jar" "%NEOFORGE_LIB_DIR%\%NEOFORGE_BASE%.pom") do (
+for %%F in ("%NEOFORGE_LIB_DIR%\%NEOFORGE_BASE%.jar" "%NEOFORGE_LIB_DIR%\%NEOFORGE_BASE%-sources.jar" "%PROJECT_DIR%neoforge\build\publications\mavenJava\pom-default.xml") do (
     if not exist "%%~fF" (
         echo Missing NeoForge artifact: %%~fF
         goto :finish
@@ -93,30 +93,40 @@ set "FABRIC_ARTIFACT_ID=%MOD_ID%-fabric"
 set "FABRIC_FILENAME_BASE=%FABRIC_ARTIFACT_ID%-%VERSION%"
 set "FABRIC_TARGET_DIR=%REPO_DIR%\maven\de\keksuccino\%FABRIC_ARTIFACT_ID%\%VERSION%"
 set "FABRIC_MODULE_SRC=%PROJECT_DIR%fabric\build\publications\mavenJava\module.json"
+set "FABRIC_POM_SRC=%PROJECT_DIR%fabric\build\publications\mavenJava\pom-default.xml"
 if not exist "%FABRIC_MODULE_SRC%" (
     echo Missing Fabric metadata file: %FABRIC_MODULE_SRC%
     goto :finish
 )
+if not exist "%FABRIC_POM_SRC%" (
+    echo Missing Fabric pom file: %FABRIC_POM_SRC%
+    goto :finish
+)
 call :stripModuleDependencies "%FABRIC_MODULE_SRC%" || goto :modulecleanfail
 if not exist "%FABRIC_TARGET_DIR%" mkdir "%FABRIC_TARGET_DIR%"
-copy /y "%FABRIC_LIB_DIR%\%FABRIC_BASE%-named.jar" "%FABRIC_TARGET_DIR%\%FABRIC_FILENAME_BASE%.jar" >nul || goto :copyfail
+copy /y "%FABRIC_LIB_DIR%\%FABRIC_BASE%.jar" "%FABRIC_TARGET_DIR%\%FABRIC_FILENAME_BASE%.jar" >nul || goto :copyfail
 copy /y "%FABRIC_LIB_DIR%\%FABRIC_BASE%-sources.jar" "%FABRIC_TARGET_DIR%\%FABRIC_FILENAME_BASE%-sources.jar" >nul || goto :copyfail
-copy /y "%FABRIC_LIB_DIR%\%FABRIC_BASE%.pom" "%FABRIC_TARGET_DIR%\%FABRIC_FILENAME_BASE%.pom" >nul || goto :copyfail
+copy /y "%FABRIC_POM_SRC%" "%FABRIC_TARGET_DIR%\%FABRIC_FILENAME_BASE%.pom" >nul || goto :copyfail
 copy /y "%FABRIC_MODULE_SRC%" "%FABRIC_TARGET_DIR%\%FABRIC_FILENAME_BASE%.module" >nul || goto :copyfail
 
 set "NEOFORGE_ARTIFACT_ID=%MOD_ID%-neoforge"
 set "NEOFORGE_FILENAME_BASE=%NEOFORGE_ARTIFACT_ID%-%VERSION%"
 set "NEOFORGE_TARGET_DIR=%REPO_DIR%\maven\de\keksuccino\%NEOFORGE_ARTIFACT_ID%\%VERSION%"
 set "NEOFORGE_MODULE_SRC=%PROJECT_DIR%neoforge\build\publications\mavenJava\module.json"
+set "NEOFORGE_POM_SRC=%PROJECT_DIR%neoforge\build\publications\mavenJava\pom-default.xml"
 if not exist "%NEOFORGE_MODULE_SRC%" (
     echo Missing NeoForge metadata file: %NEOFORGE_MODULE_SRC%
+    goto :finish
+)
+if not exist "%NEOFORGE_POM_SRC%" (
+    echo Missing NeoForge pom file: %NEOFORGE_POM_SRC%
     goto :finish
 )
 call :stripModuleDependencies "%NEOFORGE_MODULE_SRC%" || goto :modulecleanfail
 if not exist "%NEOFORGE_TARGET_DIR%" mkdir "%NEOFORGE_TARGET_DIR%"
 copy /y "%NEOFORGE_LIB_DIR%\%NEOFORGE_BASE%.jar" "%NEOFORGE_TARGET_DIR%\%NEOFORGE_FILENAME_BASE%.jar" >nul || goto :copyfail
 copy /y "%NEOFORGE_LIB_DIR%\%NEOFORGE_BASE%-sources.jar" "%NEOFORGE_TARGET_DIR%\%NEOFORGE_FILENAME_BASE%-sources.jar" >nul || goto :copyfail
-copy /y "%NEOFORGE_LIB_DIR%\%NEOFORGE_BASE%.pom" "%NEOFORGE_TARGET_DIR%\%NEOFORGE_FILENAME_BASE%.pom" >nul || goto :copyfail
+copy /y "%NEOFORGE_POM_SRC%" "%NEOFORGE_TARGET_DIR%\%NEOFORGE_FILENAME_BASE%.pom" >nul || goto :copyfail
 copy /y "%NEOFORGE_MODULE_SRC%" "%NEOFORGE_TARGET_DIR%\%NEOFORGE_FILENAME_BASE%.module" >nul || goto :copyfail
 
 pushd "%REPO_DIR%"
