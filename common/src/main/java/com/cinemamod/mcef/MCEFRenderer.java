@@ -23,15 +23,14 @@ package com.cinemamod.mcef;
 import com.mojang.blaze3d.opengl.GlStateManager;
 import com.mojang.blaze3d.opengl.GlTexture;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.textures.AddressMode;
 import com.mojang.blaze3d.textures.FilterMode;
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.TextureFormat;
 import net.minecraft.client.Minecraft;
-import net.minecraft.resources.ResourceLocation;
-
+import net.minecraft.resources.Identifier;
 import java.nio.ByteBuffer;
 import java.util.UUID;
-
 import static org.lwjgl.opengl.GL12.*;
 
 public class MCEFRenderer {
@@ -40,22 +39,22 @@ public class MCEFRenderer {
     private int textureWidth = 0;
     private int textureHeight = 0;
     
-    // ResourceLocation for this renderer's texture
-    private ResourceLocation textureLocation;
+    // Identifier for this renderer's texture
+    private final Identifier textureIdentifier;
     private MCEFDirectTexture directTexture;
     private boolean textureRegistered = false;
 
     protected MCEFRenderer(boolean transparent) {
         this.transparent = transparent;
-        // Generate a unique ResourceLocation for this renderer
+        // Generate a unique Identifier for this renderer
         String uniqueId = UUID.randomUUID().toString().toLowerCase().replace("-", "");
-        this.textureLocation = ResourceLocation.fromNamespaceAndPath("mcef", "browser_" + uniqueId);
+        this.textureIdentifier = Identifier.fromNamespaceAndPath("mcef", "browser_" + uniqueId);
     }
 
     public void initialize() {
         // Create and register the direct texture wrapper with Minecraft's TextureManager
         directTexture = new MCEFDirectTexture();
-        Minecraft.getInstance().getTextureManager().register(textureLocation, directTexture);
+        Minecraft.getInstance().getTextureManager().register(textureIdentifier, directTexture);
         textureRegistered = true;
     }
 
@@ -64,11 +63,11 @@ public class MCEFRenderer {
     }
     
     /**
-     * Gets the ResourceLocation that can be used with GuiGraphics and other Minecraft rendering methods.
-     * This ResourceLocation is registered with the TextureManager and points to the browser's texture.
+     * Gets the Identifier that can be used with GuiGraphics and other Minecraft rendering methods.
+     * This Identifier is registered with the TextureManager and points to the browser's texture.
      */
-    public ResourceLocation getTextureLocation() {
-        return textureLocation;
+    public Identifier getTextureIdentifier() {
+        return textureIdentifier;
     }
     
     /**
@@ -105,8 +104,8 @@ public class MCEFRenderer {
         }
         
         // Unregister from TextureManager
-        if (textureRegistered && textureLocation != null) {
-            Minecraft.getInstance().getTextureManager().release(textureLocation);
+        if (textureRegistered && textureIdentifier != null) {
+            Minecraft.getInstance().getTextureManager().release(textureIdentifier);
             textureRegistered = false;
         }
     }
@@ -129,10 +128,11 @@ public class MCEFRenderer {
                 1, // depthOrLayers
                 1  // mipLevels
             );
-            
+
             // Configure texture parameters
-            texture.setTextureFilter(FilterMode.LINEAR, FilterMode.LINEAR, false);
-            texture.setAddressMode(com.mojang.blaze3d.textures.AddressMode.CLAMP_TO_EDGE);
+            //TODO EXPERIMENTAL
+//            texture.setTextureFilter(FilterMode.LINEAR, FilterMode.LINEAR, false);
+//            texture.setAddressMode(AddressMode.CLAMP_TO_EDGE);
             
             textureWidth = width;
             textureHeight = height;

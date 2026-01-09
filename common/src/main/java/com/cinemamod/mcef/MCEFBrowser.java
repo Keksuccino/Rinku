@@ -22,9 +22,8 @@ package com.cinemamod.mcef;
 
 import com.cinemamod.mcef.listeners.MCEFCursorChangeListener;
 import com.mojang.blaze3d.opengl.GlStateManager;
-import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import org.cef.browser.CefBrowser;
 import org.cef.browser.CefBrowserOsr;
 import org.cef.callback.CefDragData;
@@ -34,16 +33,10 @@ import org.cef.event.CefMouseWheelEvent;
 import org.cef.misc.CefCursorType;
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.system.MemoryUtil;
-import org.lwjgl.system.libc.LibCString;
-
 import java.awt.*;
 import java.nio.ByteBuffer;
-
 import static org.lwjgl.opengl.GL11.*;
-import static org.lwjgl.opengl.GL12.*;
-
 import static org.lwjgl.glfw.GLFW.*;
-import static org.lwjgl.opengl.GL11.*;
 
 /**
  * An instance of an "Off-screen rendered" Chromium web browser.
@@ -101,13 +94,13 @@ public class MCEFBrowser extends CefBrowserOsr {
     }
     
     /**
-     * Convenience method to get the ResourceLocation for this browser's texture.
+     * Convenience method to get the Identifier for this browser's texture.
      * This can be used directly with GuiGraphics rendering methods.
      * 
-     * @return The ResourceLocation for this browser's texture, or null if not initialized
+     * @return The Identifier for this browser's texture, or null if not initialized
      */
-    public ResourceLocation getTextureLocation() {
-        return renderer != null ? renderer.getTextureLocation() : null;
+    public Identifier getTextureIdentifier() {
+        return renderer != null ? renderer.getTextureIdentifier() : null;
     }
     
     /**

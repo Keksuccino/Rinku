@@ -22,16 +22,15 @@ package com.cinemamod.mcef.example;
 
 import com.cinemamod.mcef.MCEF;
 import com.cinemamod.mcef.MCEFBrowser;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.RenderPipelines;
-import net.minecraft.client.renderer.RenderType;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
+import org.jetbrains.annotations.NotNull;
 
 public class ExampleScreen extends Screen {
 
@@ -77,8 +76,8 @@ public class ExampleScreen extends Screen {
     }
 
     @Override
-    public void resize(Minecraft minecraft, int i, int j) {
-        super.resize(minecraft, i, j);
+    public void resize(int i, int j) {
+        super.resize(i, j);
         resizeBrowser();
     }
 
@@ -89,7 +88,7 @@ public class ExampleScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partial) {
+    public void render(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY, float partial) {
 
         super.render(guiGraphics, mouseX, mouseY, partial);
         
@@ -102,8 +101,8 @@ public class ExampleScreen extends Screen {
     
     private void renderBrowserTexture(GuiGraphics guiGraphics) {
 
-        // Get the ResourceLocation for the browser texture
-        ResourceLocation textureLocation = browser.getTextureLocation();
+        // Get the Identifier for the browser texture
+        Identifier textureLocation = browser.getTextureIdentifier();
 
         int frameRenderWidth = width - BROWSER_DRAW_OFFSET * 2;
         int frameRenderHeight = height - BROWSER_DRAW_OFFSET * 2;

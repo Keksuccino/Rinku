@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.cinemamod.mcef.mixins.neoforge",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "mcef.refmap.json",
+  "mixins": [
+  ],
+  "client": [
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

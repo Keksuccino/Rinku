@@ -35,8 +35,8 @@ import java.net.URL;
 import java.util.*;
 
 /**
- * An API to create Chromium web browsers in Minecraft. Uses
- * a modified version of java-cef (Java Chromium Embedded Framework).
+ * An API to create Chromium web browsers in Minecraft.
+ * Uses a modified version of java-cef (Java Chromium Embedded Framework).
  */
 public final class MCEF {
 
