@@ -126,3 +126,95 @@ publishing {
         }
     }
 }
+
+tasks.named("build") {
+    dependsOn("generatePomFileForMavenJavaPublication", "generateMetadataFileForMavenJavaPublication")
+}
+
+tasks.withType(GenerateModuleMetadata).configureEach {
+    enabled = true
+}
+
+def stripModuleDepsTask = tasks.register("stripModuleDependencies") {
+    def moduleFile = layout.buildDirectory.file("publications/mavenJava/module.json")
+    inputs.file(moduleFile)
+    outputs.file(moduleFile)
+    doLast {
+        def file = moduleFile.get().asFile
+        if (!file.exists()) {
+            return
+        }
+        def json = new groovy.json.JsonSlurper().parse(file)
+        if (json?.variants) {
+            json.variants = json.variants.findAll { variant ->
+                !(variant instanceof Map) || variant.name != "accessTransformerElements"
+            }
+            def runtimeAllFiles = null
+            def runtimeRenamedFiles = null
+            json.variants.each { variant ->
+                if (variant instanceof Map) {
+                    if (variant.name == "runtimeElements" && variant.files instanceof List) {
+                        def allFiles = variant.files.findAll { fileEntry ->
+                            fileEntry instanceof Map &&
+                                    fileEntry.name instanceof String &&
+                                    fileEntry.name.endsWith("-all.jar")
+                        }
+                        if (allFiles != null && !allFiles.isEmpty()) {
+                            runtimeAllFiles = allFiles
+                            runtimeRenamedFiles = allFiles.collect { fileEntry ->
+                                if (fileEntry instanceof Map) {
+                                    def renamed = new LinkedHashMap(fileEntry)
+                                    if (renamed.name instanceof String && renamed.name.endsWith("-all.jar")) {
+                                        renamed.name = renamed.name.replace("-all.jar", ".jar")
+                                    }
+                                    if (renamed.url instanceof String && renamed.url.endsWith("-all.jar")) {
+                                        renamed.url = renamed.url.replace("-all.jar", ".jar")
+                                    }
+                                    renamed
+                                } else {
+                                    fileEntry
+                                }
+                            }
+                            variant.files = runtimeRenamedFiles
+                        }
+                    }
+                    variant.remove("dependencies")
+                }
+            }
+            json.variants.each { variant ->
+                if (variant instanceof Map && variant.name == "apiElements") {
+                    if (runtimeRenamedFiles != null) {
+                        variant.files = runtimeRenamedFiles.collect { fileEntry ->
+                            fileEntry instanceof Map ? new LinkedHashMap(fileEntry) : fileEntry
+                        }
+                    } else if (variant.files instanceof List) {
+                        variant.files = variant.files.findAll { fileEntry ->
+                            fileEntry instanceof Map &&
+                                    fileEntry.name instanceof String &&
+                                    fileEntry.name.endsWith("-all.jar")
+                        }
+                        variant.files = variant.files.collect { fileEntry ->
+                            if (fileEntry instanceof Map) {
+                                def renamed = new LinkedHashMap(fileEntry)
+                                if (renamed.name instanceof String && renamed.name.endsWith("-all.jar")) {
+                                    renamed.name = renamed.name.replace("-all.jar", ".jar")
+                                }
+                                if (renamed.url instanceof String && renamed.url.endsWith("-all.jar")) {
+                                    renamed.url = renamed.url.replace("-all.jar", ".jar")
+                                }
+                                renamed
+                            } else {
+                                fileEntry
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        file.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(json))
+    }
+}
+
+tasks.named("generateMetadataFileForMavenJavaPublication") {
+    finalizedBy(stripModuleDepsTask)
+}

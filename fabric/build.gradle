@@ -90,3 +90,36 @@ publishing {
         }
     }
 }
+
+tasks.named("build") {
+    dependsOn("generatePomFileForMavenJavaPublication", "generateMetadataFileForMavenJavaPublication")
+}
+
+tasks.withType(GenerateModuleMetadata).configureEach {
+    enabled = true
+}
+
+def stripModuleDepsTask = tasks.register("stripModuleDependencies") {
+    def moduleFile = layout.buildDirectory.file("publications/mavenJava/module.json")
+    inputs.file(moduleFile)
+    outputs.file(moduleFile)
+    doLast {
+        def file = moduleFile.get().asFile
+        if (!file.exists()) {
+            return
+        }
+        def json = new groovy.json.JsonSlurper().parse(file)
+        if (json?.variants) {
+            json.variants.each { variant ->
+                if (variant instanceof Map) {
+                    variant.remove("dependencies")
+                }
+            }
+        }
+        file.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(json))
+    }
+}
+
+tasks.named("generateMetadataFileForMavenJavaPublication") {
+    finalizedBy(stripModuleDepsTask)
+}
