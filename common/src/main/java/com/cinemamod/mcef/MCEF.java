@@ -21,6 +21,7 @@
 package com.cinemamod.mcef;
 
 import com.cinemamod.mcef.listeners.MCEFInitListener;
+import com.cinemamod.mcef.mixins.MixinMinecraft;
 import net.minecraft.client.Minecraft;
 import org.cef.misc.CefCursorType;
 import org.lwjgl.glfw.GLFW;
@@ -74,7 +75,7 @@ public final class MCEF {
     }
 
     /**
-     * This gets called by {@link com.cinemamod.mcef.mixins.CefInitMixin}.
+     * This gets called by {@link MixinMinecraft}.
      * This should not be called by anything else.
      */
     public static boolean initialize() {

@@ -7,10 +7,9 @@
   "mixins": [
   ],
   "client": [
-    "CefDownloadMixin",
-    "CefInitMixin",
-    "CefRenderUpdateMixin",
-    "CefWindowsShutdownMixin"
+    "MixinClientPackSource",
+    "MixinMinecraft",
+    "MixinGameRenderer"
   ],
   "injectors": {
     "defaultRequire": 1

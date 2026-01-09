@@ -1,23 +1,3 @@
-/*
- *     MCEF (Minecraft Chromium Embedded Framework)
- *     Copyright (C) 2023 CinemaMod Group
- *
- *     This library is free software; you can redistribute it and/or
- *     modify it under the terms of the GNU Lesser General Public
- *     License as published by the Free Software Foundation; either
- *     version 2.1 of the License, or (at your option) any later version.
- *
- *     This library is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- *     Lesser General Public License for more details.
- *
- *     You should have received a copy of the GNU Lesser General Public
- *     License along with this library; if not, write to the Free Software
- *     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301
- *     USA
- */
-
 package com.cinemamod.mcef.mixins;
 
 import com.cinemamod.mcef.MCEF;
@@ -31,7 +11,6 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
 import java.io.File;
 import java.io.IOException;
 
@@ -46,31 +25,12 @@ import java.io.IOException;
  * installation. Also see {@link org.cef.CefApp}.
  */
 @Mixin(ClientPackSource.class)
-public class CefDownloadMixin {
-    @Unique
-    private static void setupLibraryPath() throws IOException {
-        final File mcefLibrariesDir;
-
-        // Check for development environment
-        // TODO: handle eclipse/others
-        // i.e. mcef-repo/neoforge/build
-        File buildDir = new File("../build");
-        if (buildDir.exists() && buildDir.isDirectory()) {
-            mcefLibrariesDir = new File(buildDir, "mcef-libraries/");
-        } else {
-            mcefLibrariesDir = new File("mods/mcef-libraries/");
-        }
-
-        mcefLibrariesDir.mkdirs();
-
-        System.setProperty("mcef.libraries.path", mcefLibrariesDir.getCanonicalPath());
-        System.setProperty("jcef.path", new File(mcefLibrariesDir, MCEFPlatform.getPlatform().getNormalizedName()).getCanonicalPath());
-    }
+public class MixinClientPackSource {
 
     @Inject(at = @At("HEAD"), method = "<clinit>")
     private static void sinit(CallbackInfo callbackInfo) {
         try {
-            setupLibraryPath();
+            setupLibraryPath_MCEF();
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -124,4 +84,25 @@ public class CefDownloadMixin {
         });
         downloadThread.start();
     }
+
+    @Unique
+    private static void setupLibraryPath_MCEF() throws IOException {
+        final File mcefLibrariesDir;
+
+        // Check for development environment
+        // TODO: handle eclipse/others
+        // i.e. mcef-repo/neoforge/build
+        File buildDir = new File("../build");
+        if (buildDir.exists() && buildDir.isDirectory()) {
+            mcefLibrariesDir = new File(buildDir, "mcef-libraries/");
+        } else {
+            mcefLibrariesDir = new File("mods/mcef-libraries/");
+        }
+
+        mcefLibrariesDir.mkdirs();
+
+        System.setProperty("mcef.libraries.path", mcefLibrariesDir.getCanonicalPath());
+        System.setProperty("jcef.path", new File(mcefLibrariesDir, MCEFPlatform.getPlatform().getNormalizedName()).getCanonicalPath());
+    }
+
 }
