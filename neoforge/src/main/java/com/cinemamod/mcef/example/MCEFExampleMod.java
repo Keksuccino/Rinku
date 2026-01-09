@@ -9,8 +9,6 @@ import net.neoforged.neoforge.common.NeoForge;
 
 public class MCEFExampleMod {
 
-    private static final Minecraft MINECRAFT = Minecraft.getInstance();
-
     public static final KeyMapping KEY_MAPPING = new KeyMapping("Open Browser", InputConstants.KEY_F12, KeyMapping.Category.MISC);
 
     public MCEFExampleMod() {
@@ -19,9 +17,9 @@ public class MCEFExampleMod {
 
     public void onTick(ClientTickEvent.Post event) {
         // Check if our key was pressed and make sure the ExampleScreen isn't already open
-        if (KEY_MAPPING.isDown() && !(MINECRAFT.screen instanceof ExampleScreen)) {
+        if (KEY_MAPPING.isDown() && !(Minecraft.getInstance().screen instanceof ExampleScreen)) {
             // Display the ExampleScreen web browser
-            MINECRAFT.setScreen(new ExampleScreen(Component.literal("Example Screen")));
+            Minecraft.getInstance().setScreen(new ExampleScreen(Component.literal("Example Screen")));
         }
     }
 

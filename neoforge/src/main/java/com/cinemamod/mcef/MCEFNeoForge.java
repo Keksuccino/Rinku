@@ -18,26 +18,31 @@
  *     USA
  */
 
-/*
- * little unsure of if I should uncomment this or not
- * basically; forge's way of doing this sorta "listening for a thing" is events
- * this allows that to be used for MCEF initalization
- *
- * there is a fabric-equivalent-expectation for this, but it's sorta just what's already in the MCEF class if I'm remembering correctly
- */
+package com.cinemamod.mcef;
 
-//package com.cinemamod.mcef;
-//
-//import net.minecraftforge.common.MinecraftForge;
-//import net.minecraftforge.eventbus.api.Event;
-//
-//public class MCEFInitEvent extends Event {
-//	static {
-//		MCEF.scheduleForInit(() -> {
-//			MinecraftForge.EVENT_BUS.post(new MCEFInitEvent());
-//		});
-//	}
-//
-//	public MCEFInitEvent() {
-//	}
-//}
+import com.cinemamod.mcef.example.MCEFExampleMod;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
+import net.neoforged.fml.event.lifecycle.FMLDedicatedServerSetupEvent;
+import net.neoforged.fml.loading.FMLEnvironment;
+
+@Mod(MCEF.MOD_ID)
+public class MCEFNeoForge {
+
+    public MCEFNeoForge(IEventBus modEventBus) {
+        modEventBus.addListener(this::clientSetup);
+        modEventBus.addListener(this::serverSetup);
+    }
+
+    private void clientSetup(final FMLClientSetupEvent event) {
+        if (!FMLEnvironment.isProduction()) {
+            new MCEFExampleMod();
+        }
+    }
+
+    private void serverSetup(final FMLDedicatedServerSetupEvent event) {
+        // MCEF server-side does nothing
+    }
+
+}
