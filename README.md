@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://github.com/CinemaMod/mcef/assets/30220598/938896d7-2589-49df-8f82-29266c64dfb7" alt="MCEF Logo" style="width:66px;height:66px;">
+<img width="64" alt="mcef_icon" src="https://github.com/user-attachments/assets/c11845ff-b57c-4e15-928f-19055874903c" />
 </p>
 
 # MCEF (Minecraft Chromium Embedded Framework)
