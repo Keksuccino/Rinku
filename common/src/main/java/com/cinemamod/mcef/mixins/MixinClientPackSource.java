@@ -6,6 +6,8 @@ import com.cinemamod.mcef.MCEFPlatform;
 import com.cinemamod.mcef.MCEFSettings;
 import com.cinemamod.mcef.internal.MCEFDownloadListener;
 import net.minecraft.client.resources.ClientPackSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -26,6 +28,8 @@ import java.io.IOException;
  */
 @Mixin(ClientPackSource.class)
 public class MixinClientPackSource {
+    @Unique
+    private static final Logger LOGGER = LoggerFactory.getLogger("MCEF");
 
     @Inject(at = @At("HEAD"), method = "<clinit>")
     private static void on_clinit_MCEF(CallbackInfo callbackInfo) {
@@ -69,7 +73,7 @@ public class MixinClientPackSource {
     private static void runDownloaderFlow_MCEF() {
         try {
             String javaCefCommit = MCEF.getJavaCefCommit();
-            MCEF.getLogger().info("java-cef commit: " + javaCefCommit);
+            LOGGER.info("java-cef commit: " + javaCefCommit);
 
             MCEFSettings settings = MCEF.getSettings();
             MCEFPlatform platform = MCEFPlatform.getPlatform();
@@ -103,7 +107,7 @@ public class MixinClientPackSource {
                     failDownload_MCEF("Failed to download JCEF checksum", e);
                     return;
                 }
-                MCEF.getLogger().warn("Failed to download JCEF checksum with checksum enforcement disabled", e);
+                LOGGER.warn("Failed to download JCEF checksum with checksum enforcement disabled", e);
             }
 
             boolean downloadJcefBuild = !hasPlatformLibrariesDir || (hasChecksumResult && !checksumMatches);
@@ -129,9 +133,9 @@ public class MixinClientPackSource {
     @Unique
     private static void failDownload_MCEF(String task, Exception e) {
         if (e != null) {
-            MCEF.getLogger().error(task, e);
+            LOGGER.error(task, e);
         } else {
-            MCEF.getLogger().error(task);
+            LOGGER.error(task);
         }
         MCEFDownloadListener.INSTANCE.setTask(task);
         MCEFDownloadListener.INSTANCE.setFailed(true);

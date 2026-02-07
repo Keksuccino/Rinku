@@ -1,23 +1,3 @@
-/*
- *     MCEF (Minecraft Chromium Embedded Framework)
- *     Copyright (C) 2023 CinemaMod Group
- *
- *     This library is free software; you can redistribute it and/or
- *     modify it under the terms of the GNU Lesser General Public
- *     License as published by the Free Software Foundation; either
- *     version 2.1 of the License, or (at your option) any later version.
- *
- *     This library is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- *     Lesser General Public License for more details.
- *
- *     You should have received a copy of the GNU Lesser General Public
- *     License along with this library; if not, write to the Free Software
- *     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301
- *     USA
- */
-
 package com.cinemamod.mcef;
 
 import com.cinemamod.mcef.listeners.MCEFInitListener;
@@ -42,7 +22,7 @@ import java.util.*;
  */
 public final class MCEF {
 
-    public static final Logger LOGGER = LoggerFactory.getLogger("MCEF");
+    private static final Logger LOGGER = LoggerFactory.getLogger("MCEF");
     public static final String MOD_ID = "mcef";
 
     private static MCEFSettings settings;
@@ -62,10 +42,6 @@ public final class MCEF {
         awaitingInit.add(task);
     }
 
-    public static Logger getLogger() {
-        return LOGGER;
-    }
-
     /**
      * Get access to various settings for MCEF.
      * @return Returns the existing {@link MCEFSettings} or creates a new {@link MCEFSettings} and loads from disk (blocking)
@@ -76,7 +52,7 @@ public final class MCEF {
             try {
                 settings.load();
             } catch (IOException e) {
-                e.printStackTrace();
+                LOGGER.warn("Failed to load MCEF settings from disk; using defaults.", e);
             }
         }
         return settings;
@@ -87,7 +63,7 @@ public final class MCEF {
      * This should not be called by anything else.
      */
     public static boolean initialize() {
-        MCEF.getLogger().info("Initializing CEF on " + MCEFPlatform.getPlatform().getNormalizedName() + "...");
+        LOGGER.info("Initializing CEF on " + MCEFPlatform.getPlatform().getNormalizedName() + "...");
         if (CefUtil.init()) {
             app = new MCEFApp(CefUtil.getCefApp());
             client = new MCEFClient(CefUtil.getCefClient());
@@ -107,7 +83,7 @@ public final class MCEF {
 
             awaitingInit.forEach(t -> t.onInit(true));
             awaitingInit.clear();
-            MCEF.getLogger().info("Chromium Embedded Framework initialized");
+            LOGGER.info("Chromium Embedded Framework initialized");
 
             app.getHandle().registerSchemeHandlerFactory(
                     "mod", "",
@@ -131,7 +107,7 @@ public final class MCEF {
         }
         awaitingInit.forEach(t -> t.onInit(false));
         awaitingInit.clear();
-        MCEF.getLogger().error("Could not initialize Chromium Embedded Framework");
+        LOGGER.error("Could not initialize Chromium Embedded Framework");
         shutdown();
         return false;
     }
@@ -316,7 +292,7 @@ public final class MCEF {
             Minecraft.getInstance().submit(() -> preloadBrowser(transparent));
         } catch (Throwable throwable) {
             decrementPreloadInFlight(transparent);
-            MCEF.getLogger().warn(
+            LOGGER.warn(
                     "Failed to submit {} browser preload task",
                     transparent ? "transparent" : "opaque",
                     throwable
@@ -349,7 +325,7 @@ public final class MCEF {
                 }
             }
         } catch (Throwable throwable) {
-            MCEF.getLogger().warn(
+            LOGGER.warn(
                     "Failed to preload {} browser",
                     transparent ? "transparent" : "opaque",
                     throwable
@@ -413,7 +389,7 @@ public final class MCEF {
         try {
             browser.close();
         } catch (Throwable throwable) {
-            MCEF.getLogger().warn("Failed to close preloaded browser", throwable);
+            LOGGER.warn("Failed to close preloaded browser", throwable);
         }
     }
 
@@ -439,7 +415,7 @@ public final class MCEF {
                     commits.put(resource.getFile(), properties.getProperty("java-cef-commit"));
                 }
             } catch (IOException e) {
-                e.printStackTrace();
+                LOGGER.warn("Failed to read manifest while resolving java-cef commit from {}", resource, e);
             }
         });
 

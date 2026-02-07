@@ -24,6 +24,8 @@ import com.cinemamod.mcef.internal.MCEFDownloadListener;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -60,6 +62,8 @@ import java.util.regex.Pattern;
  * Email ds58@mailbox.org for any questions or concerns regarding the file hosting.
  */
 public class MCEFDownloader {
+    private static final Logger LOGGER = LoggerFactory.getLogger("MCEF");
+
     public static final String OFFICIAL_MIRROR = "https://mcef-download.cinemamod.com";
 
     private static final String JAVA_CEF_DOWNLOAD_URL = "{host}/java-cef-builds/{java-cef-commit}/{platform}.tar.gz";
@@ -174,10 +178,10 @@ public class MCEFDownloader {
                 Files.deleteIfExists(jcefBuildHashFileTemp.toPath());
                 return true;
             } else {
-                MCEF.getLogger().warn("JCEF Hash does not match.");
+                LOGGER.warn("JCEF Hash does not match.");
             }
         } else {
-            MCEF.getLogger().info("Local JCEF hash file does not exist.");
+            LOGGER.info("Local JCEF hash file does not exist.");
         }
 
         try {
@@ -210,7 +214,7 @@ public class MCEFDownloader {
                 return;
             } catch (IOException e) {
                 lastException = e;
-                MCEF.getLogger().warn("Download failed from {}: {}", mirror, e.getMessage());
+                LOGGER.warn("Download failed from {}: {}", mirror, e.getMessage());
             }
         }
 
@@ -227,7 +231,7 @@ public class MCEFDownloader {
         HttpURLConnection urlConnection = null;
 
         try {
-            MCEF.getLogger().info(urlString + " -> " + outputFile.getCanonicalPath());
+            LOGGER.info(urlString + " -> " + outputFile.getCanonicalPath());
 
             URL url = new URL(urlString);
             urlConnection = (HttpURLConnection) url.openConnection();
@@ -345,7 +349,7 @@ public class MCEFDownloader {
             if (strict) {
                 throw new IOException("Checksum file size out of bounds: " + checksumFile.getName());
             }
-            MCEF.getLogger().warn("Checksum file size out of bounds: {}", checksumFile.getName());
+            LOGGER.warn("Checksum file size out of bounds: {}", checksumFile.getName());
             return null;
         }
 

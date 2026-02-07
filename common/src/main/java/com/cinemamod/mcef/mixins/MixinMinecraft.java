@@ -14,6 +14,8 @@ import net.minecraft.client.gui.screens.worldselection.EditGameRulesScreen;
 import net.minecraft.client.gui.screens.worldselection.ExperimentsScreen;
 import net.minecraft.client.gui.screens.worldselection.SelectWorldScreen;
 import org.jetbrains.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -31,6 +33,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 @Mixin(Minecraft.class)
 public abstract class MixinMinecraft {
+    @Unique
+    private static final Logger LOGGER = LoggerFactory.getLogger("MCEF");
 
     @Unique
     private static final AtomicBoolean RECURSION_DETECTOR_MCEF = new AtomicBoolean(false);
@@ -71,26 +75,26 @@ public abstract class MixinMinecraft {
             ) {
                 // If the download is done and didn't fail
                 if (MCEFDownloadListener.INSTANCE.isDone() && !MCEFDownloadListener.INSTANCE.isFailed()) {
-                    MCEF.getLogger().debug("MCEF already finished downloading, scheduling loading.");
+                    LOGGER.debug("MCEF already finished downloading, scheduling loading.");
                     Minecraft.getInstance().execute((() -> {
-                        MCEF.getLogger().debug("MCEF is attempting to load.");
+                        LOGGER.debug("MCEF is attempting to load.");
                         try {
                             Thread.sleep(1000);
                         } catch (InterruptedException e) {
-                            MCEF.getLogger().error("I don't even know what occurred here.", e);
+                            LOGGER.error("I don't even know what occurred here.", e);
                         }
                         MCEF.initialize();
                     }));
                 }
                 // If the download is not done and didn't fail
                 else if (!MCEFDownloadListener.INSTANCE.isDone() && !MCEFDownloadListener.INSTANCE.isFailed()) {
-                    MCEF.getLogger().debug("MCEF has not finished loading, displaying loading screen.");
+                    LOGGER.debug("MCEF has not finished loading, displaying loading screen.");
                     setScreen(new MCEFDownloaderMenu(screen));
                     info.cancel();
                 }
                 // If the download failed
                 else if (MCEFDownloadListener.INSTANCE.isFailed()) {
-                    MCEF.getLogger().error("MCEF failed to initialize!");
+                    LOGGER.error("MCEF failed to initialize!");
                 }
             }
 
@@ -112,7 +116,7 @@ public abstract class MixinMinecraft {
 
         Path mcefLibrariesPath = resolveMcefLibrariesPath_MCEF();
         if (mcefLibrariesPath == null) {
-            MCEF.getLogger().warn("mcef.libraries.path is not set, skipping scoped JCEF helper cleanup.");
+            LOGGER.warn("mcef.libraries.path is not set, skipping scoped JCEF helper cleanup.");
             return;
         }
 
@@ -126,19 +130,19 @@ public abstract class MixinMinecraft {
 
                     if (terminateProcess_MCEF(processHandle)) {
                         terminatedProcesses.incrementAndGet();
-                        MCEF.getLogger().warn("Terminated lingering JCEF helper process (pid={}).", processHandle.pid());
+                        LOGGER.warn("Terminated lingering JCEF helper process (pid={}).", processHandle.pid());
                     }
                 } catch (Exception e) {
-                    MCEF.getLogger().debug("Unable to inspect process {} for scoped JCEF cleanup.", processHandle.pid(), e);
+                    LOGGER.debug("Unable to inspect process {} for scoped JCEF cleanup.", processHandle.pid(), e);
                 }
             });
         } catch (Exception e) {
-            MCEF.getLogger().error("Unable to enumerate processes for scoped JCEF cleanup.", e);
+            LOGGER.error("Unable to enumerate processes for scoped JCEF cleanup.", e);
             return;
         }
 
         if (terminatedProcesses.get() > 0) {
-            MCEF.getLogger().warn("Terminated {} lingering JCEF helper process(es) under {}.",
+            LOGGER.warn("Terminated {} lingering JCEF helper process(es) under {}.",
                     terminatedProcesses.get(), mcefLibrariesPath);
         }
 

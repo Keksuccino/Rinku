@@ -37,6 +37,8 @@ import org.cef.handler.CefLoadHandler;
 import org.cef.misc.CefAudioParameters;
 import org.cef.misc.DataPointer;
 import org.cef.network.CefRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -45,6 +47,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * A wrapper around {@link CefClient}
  */
 public class MCEFClient implements CefLoadHandler, CefContextMenuHandler, CefDisplayHandler, CefAudioHandler, CefDownloadHandler {
+    private static final Logger LOGGER = LoggerFactory.getLogger("MCEF");
+
     private final CefClient handle;
     private final List<CefLoadHandler> loadHandlers = new CopyOnWriteArrayList<>();
     private final List<CefContextMenuHandler> contextMenuHandlers = new CopyOnWriteArrayList<>();
@@ -203,7 +207,7 @@ public class MCEFClient implements CefLoadHandler, CefContextMenuHandler, CefDis
         for (CefAudioHandler audioHandler : audioHandlers) {
             audioHandler.onAudioStreamError(browser, text);
         }
-        MCEF.getLogger().warn("An audio stream threw an error: " + text);
+        LOGGER.warn("An audio stream threw an error: " + text);
     }
 
     public void addDownloadHandler(CefDownloadHandler handler) {
@@ -269,13 +273,13 @@ public class MCEFClient implements CefLoadHandler, CefContextMenuHandler, CefDis
                 : level;
 
         switch (effectiveLevel) {
-            case LOGSEVERITY_VERBOSE -> MCEF.getLogger().debug("[CEF Console][{}] {}:{} - {}", browserId, sourceValue, line, messageValue);
+            case LOGSEVERITY_VERBOSE -> LOGGER.debug("[CEF Console][{}] {}:{} - {}", browserId, sourceValue, line, messageValue);
             case LOGSEVERITY_DEFAULT, LOGSEVERITY_INFO ->
-                    MCEF.getLogger().info("[CEF Console][{}] {}:{} - {}", browserId, sourceValue, line, messageValue);
+                    LOGGER.info("[CEF Console][{}] {}:{} - {}", browserId, sourceValue, line, messageValue);
             case LOGSEVERITY_WARNING ->
-                    MCEF.getLogger().warn("[CEF Console][{}] {}:{} - {}", browserId, sourceValue, line, messageValue);
+                    LOGGER.warn("[CEF Console][{}] {}:{} - {}", browserId, sourceValue, line, messageValue);
             case LOGSEVERITY_ERROR, LOGSEVERITY_FATAL ->
-                    MCEF.getLogger().error("[CEF Console][{}] {}:{} - {}", browserId, sourceValue, line, messageValue);
+                    LOGGER.error("[CEF Console][{}] {}:{} - {}", browserId, sourceValue, line, messageValue);
             case LOGSEVERITY_DISABLE -> {
                 // Nothing to forward.
             }

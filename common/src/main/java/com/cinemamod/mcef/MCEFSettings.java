@@ -22,6 +22,8 @@ package com.cinemamod.mcef;
 
 import net.minecraft.client.Minecraft;
 import org.cef.CefSettings;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -35,6 +37,8 @@ import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 
 public class MCEFSettings {
+    private static final Logger LOGGER = LoggerFactory.getLogger("MCEF");
+
     private static final Path PATH = Minecraft.getInstance().gameDirectory
             .toPath()
             .resolve("config")
@@ -284,7 +288,7 @@ public class MCEFSettings {
             try {
                 save();
             } catch (IOException e) {
-                MCEF.getLogger().error("Failed to save MCEF settings", e);
+                LOGGER.error("Failed to save MCEF settings", e);
             }
         });
     }
@@ -380,7 +384,7 @@ public class MCEFSettings {
         try {
             return MCEFDownloader.MirrorPolicy.valueOf(normalized);
         } catch (IllegalArgumentException e) {
-            MCEF.getLogger().warn("Invalid mcef.properties value for download-mirror-policy: {}", raw);
+            LOGGER.warn("Invalid mcef.properties value for download-mirror-policy: {}", raw);
             return fallback;
         }
     }
@@ -400,7 +404,7 @@ public class MCEFSettings {
         try {
             return CefSettings.LogSeverity.valueOf(normalized);
         } catch (IllegalArgumentException e) {
-            MCEF.getLogger().warn("Invalid mcef.properties value for {}: {}", key, raw);
+            LOGGER.warn("Invalid mcef.properties value for {}: {}", key, raw);
             return fallback;
         }
     }
@@ -415,7 +419,7 @@ public class MCEFSettings {
             case "true", "1", "yes", "y", "on" -> true;
             case "false", "0", "no", "n", "off" -> false;
             default -> {
-                MCEF.getLogger().warn("Invalid mcef.properties value for {}: {}", key, raw);
+                LOGGER.warn("Invalid mcef.properties value for {}: {}", key, raw);
                 yield fallback;
             }
         };
@@ -429,7 +433,7 @@ public class MCEFSettings {
         try {
             return clampInt(Integer.parseInt(raw.trim()), min, max, fallback, key);
         } catch (NumberFormatException e) {
-            MCEF.getLogger().warn("Invalid mcef.properties value for {}: {}", key, raw);
+            LOGGER.warn("Invalid mcef.properties value for {}: {}", key, raw);
             return fallback;
         }
     }
@@ -442,14 +446,14 @@ public class MCEFSettings {
         try {
             return clampLong(Long.parseLong(raw.trim()), min, max, fallback, key);
         } catch (NumberFormatException e) {
-            MCEF.getLogger().warn("Invalid mcef.properties value for {}: {}", key, raw);
+            LOGGER.warn("Invalid mcef.properties value for {}: {}", key, raw);
             return fallback;
         }
     }
 
     private static int clampInt(int value, int min, int max, int fallback, String key) {
         if (value < min || value > max) {
-            MCEF.getLogger().warn("Out of range mcef.properties value for {}: {}", key, value);
+            LOGGER.warn("Out of range mcef.properties value for {}: {}", key, value);
             return fallback;
         }
         return value;
@@ -457,7 +461,7 @@ public class MCEFSettings {
 
     private static long clampLong(long value, long min, long max, long fallback, String key) {
         if (value < min || value > max) {
-            MCEF.getLogger().warn("Out of range mcef.properties value for {}: {}", key, value);
+            LOGGER.warn("Out of range mcef.properties value for {}: {}", key, value);
             return fallback;
         }
         return value;
@@ -472,12 +476,12 @@ public class MCEFSettings {
         try {
             URI uri = new URI(trimmed);
             if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost() == null) {
-                MCEF.getLogger().warn("Invalid mcef.properties value for {}: {}", key, value);
+                LOGGER.warn("Invalid mcef.properties value for {}: {}", key, value);
                 return fallback;
             }
             return trimmed;
         } catch (URISyntaxException e) {
-            MCEF.getLogger().warn("Invalid mcef.properties value for {}: {}", key, value);
+            LOGGER.warn("Invalid mcef.properties value for {}: {}", key, value);
             return fallback;
         }
     }

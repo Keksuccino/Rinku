@@ -24,6 +24,8 @@ import net.minecraft.client.Minecraft;
 import org.cef.CefApp;
 import org.cef.CefClient;
 import org.cef.CefSettings;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -38,6 +40,8 @@ import java.util.Set;
  * This class mostly just interacts with org.cef.* for internal use in {@link MCEF}
  */
 final class CefUtil {
+    private static final Logger LOGGER = LoggerFactory.getLogger("MCEF");
+
     private CefUtil() {
     }
 
@@ -59,7 +63,7 @@ final class CefUtil {
         try {
             Files.setPosixFilePermissions(file.toPath(), perms);
         } catch (IOException e) {
-            MCEF.getLogger().error("Failed to set " + file + " as executable.", e);
+            LOGGER.error("Failed to set " + file + " as executable.", e);
         }
     }
 
