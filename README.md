@@ -36,7 +36,7 @@ repositories {
 }
 
 dependencies {
-    modImplementation "de.keksuccino:mcef-fabric:2.1.9-1.21.11"
+    modImplementation "de.keksuccino:mcef-fabric:2.2.0-1.21.11"
 }
 ```
 
@@ -50,7 +50,7 @@ repositories {
 }
 
 dependencies {
-    implementation "de.keksuccino:mcef-neoforge:2.1.9-1.21.11"
+    implementation "de.keksuccino:mcef-neoforge:2.2.0-1.21.11"
 }
 ```
 
