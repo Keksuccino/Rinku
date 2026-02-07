@@ -73,6 +73,8 @@
 - Website console messages are now filtered by `cef-console-log-forwarding-min-severity` in `MCEFSettings`.
   - `MCEFClient` always consumes CEF console callbacks to prevent unfiltered direct console spam.
   - Forwarding to Minecraft log occurs only when message severity meets the configured threshold.
+- Native CEF/Chromium log verbosity is now settings-driven via `cef-native-log-severity`.
+  - Default is `LOGSEVERITY_DISABLE` to suppress Chromium warning/error spam in the Minecraft log.
 - Runtime binary downloads now use GitHub release assets from `Keksuccino/mcef_resources`.
   - Official source moved to `https://github.com/Keksuccino/mcef_resources/releases/download`.
   - Java-CEF assets are resolved from release tags in the format `java-cef-<commit>`.

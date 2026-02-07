@@ -54,6 +54,7 @@ public class MCEFSettings {
     private static final long DEFAULT_DOWNLOAD_MAX_EXTRACTED_BYTES = 2_000L * 1024L * 1024L;
     private static final boolean DEFAULT_CEF_DISABLE_WEB_SECURITY = true;
     private static final boolean DEFAULT_CEF_ENABLE_WIDEVINE_CDM = true;
+    private static final CefSettings.LogSeverity DEFAULT_NATIVE_CEF_LOG_SEVERITY = CefSettings.LogSeverity.LOGSEVERITY_DISABLE;
     private static final CefSettings.LogSeverity DEFAULT_CONSOLE_LOG_FORWARDING_MIN_SEVERITY = CefSettings.LogSeverity.LOGSEVERITY_DISABLE;
     private static final boolean DEFAULT_BROWSER_PRELOAD_ENABLED = true;
     private static final int DEFAULT_BROWSER_PRELOAD_TRANSPARENT_POOL_SIZE = 1;
@@ -72,6 +73,7 @@ public class MCEFSettings {
     private boolean useCache;
     private boolean cefDisableWebSecurity;
     private boolean cefEnableWidevineCdm;
+    private CefSettings.LogSeverity nativeCefLogSeverity;
     private CefSettings.LogSeverity consoleLogForwardingMinSeverity;
     private boolean browserPreloadEnabled;
     private int browserPreloadTransparentPoolSize;
@@ -95,6 +97,7 @@ public class MCEFSettings {
         useCache = true;
         cefDisableWebSecurity = DEFAULT_CEF_DISABLE_WEB_SECURITY;
         cefEnableWidevineCdm = DEFAULT_CEF_ENABLE_WIDEVINE_CDM;
+        nativeCefLogSeverity = DEFAULT_NATIVE_CEF_LOG_SEVERITY;
         consoleLogForwardingMinSeverity = DEFAULT_CONSOLE_LOG_FORWARDING_MIN_SEVERITY;
         browserPreloadEnabled = DEFAULT_BROWSER_PRELOAD_ENABLED;
         browserPreloadTransparentPoolSize = DEFAULT_BROWSER_PRELOAD_TRANSPARENT_POOL_SIZE;
@@ -218,6 +221,17 @@ public class MCEFSettings {
         saveAsync();
     }
 
+    public CefSettings.LogSeverity getNativeCefLogSeverity() {
+        return nativeCefLogSeverity;
+    }
+
+    public void setNativeCefLogSeverity(CefSettings.LogSeverity nativeCefLogSeverity) {
+        this.nativeCefLogSeverity = nativeCefLogSeverity == null
+                ? DEFAULT_NATIVE_CEF_LOG_SEVERITY
+                : nativeCefLogSeverity;
+        saveAsync();
+    }
+
     public CefSettings.LogSeverity getConsoleLogForwardingMinSeverity() {
         return consoleLogForwardingMinSeverity;
     }
@@ -316,6 +330,7 @@ public class MCEFSettings {
         properties.setProperty("use-cache", String.valueOf(useCache));
         properties.setProperty("cef-disable-web-security", String.valueOf(cefDisableWebSecurity));
         properties.setProperty("cef-enable-widevine-cdm", String.valueOf(cefEnableWidevineCdm));
+        properties.setProperty("cef-native-log-severity", nativeCefLogSeverity.name());
         properties.setProperty("cef-console-log-forwarding-min-severity", consoleLogForwardingMinSeverity.name());
         properties.setProperty("browser-preload-enabled", String.valueOf(browserPreloadEnabled));
         properties.setProperty("browser-preload-transparent-pool-size", String.valueOf(browserPreloadTransparentPoolSize));
@@ -354,6 +369,11 @@ public class MCEFSettings {
         useCache = parseBoolean(properties, "use-cache", useCache);
         cefDisableWebSecurity = parseBoolean(properties, "cef-disable-web-security", cefDisableWebSecurity);
         cefEnableWidevineCdm = parseBoolean(properties, "cef-enable-widevine-cdm", cefEnableWidevineCdm);
+        nativeCefLogSeverity = parseLogSeverity(
+                properties.getProperty("cef-native-log-severity"),
+                nativeCefLogSeverity,
+                "cef-native-log-severity"
+        );
         consoleLogForwardingMinSeverity = parseLogSeverity(
                 properties.getProperty("cef-console-log-forwarding-min-severity"),
                 consoleLogForwardingMinSeverity,
