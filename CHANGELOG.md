@@ -30,6 +30,9 @@
 
 ### Fixed
 - Fixed infinite recursion in `MCEFBrowser.startDragging(...)`.
+- Fixed AltGr character input handling for browser text entry.
+  - Normalized AltGr (`Right Alt` reported as `Ctrl+Alt` on many layouts) in MCEF key forwarding so characters like `@` input correctly.
+  - Adjusted example screen keyboard event consumption to avoid Minecraft/global handlers interfering with browser text input.
 - Fixed popup paint robustness and correctness in `MCEFBrowser`.
   - Added guards for null/invalid popup state.
   - Corrected popup region copy offsets and row-wise copy behavior.

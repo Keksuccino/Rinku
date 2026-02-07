@@ -370,12 +370,12 @@ public class ExampleScreen extends Screen {
         }
 
         if (urlBox != null && urlBox.isFocused()) {
-            return false;
+            return true;
         }
 
         browser.sendKeyPress(event.key(), event.scancode(), event.modifiers());
         browser.setFocus(true);
-        return false;
+        return true;
     }
 
     @Override
@@ -385,12 +385,12 @@ public class ExampleScreen extends Screen {
         }
 
         if (urlBox != null && urlBox.isFocused()) {
-            return false;
+            return true;
         }
 
         browser.sendKeyRelease(event.key(), event.scancode(), event.modifiers());
         browser.setFocus(true);
-        return false;
+        return true;
     }
 
     @Override
@@ -400,13 +400,13 @@ public class ExampleScreen extends Screen {
         }
 
         if (urlBox != null && urlBox.isFocused()) {
-            return false;
+            return true;
         }
 
         if (event.codepoint() == (char) 0) return false;
         browser.sendKeyTyped((char) event.codepoint(), event.modifiers());
         browser.setFocus(true);
-        return false;
+        return true;
     }
 
 }

@@ -74,6 +74,11 @@ public class MCEFBrowser extends CefBrowserOsr {
      * CEF is a bit odd and implements mouse buttons as a part of modifier flags.
      */
     private int btnMask = 0;
+    /**
+     * Tracks right-alt state so we can distinguish AltGr text input
+     * from regular Ctrl+Alt shortcuts.
+     */
+    private boolean rightAltDown_MCEF = false;
 
     // Data relating to popups and graphics
     // Marked as protected in-case a mod wants to extend MCEFBrowser and override the repaint logic
@@ -397,8 +402,11 @@ public class MCEFBrowser extends CefBrowserOsr {
 
     // Inputs
     public void sendKeyPress(int keyCode, long scanCode, int modifiers) {
+        updateModifierStateOnKeyPress_MCEF(keyCode);
+        int normalizedModifiers = normalizeAltGrModifiers_MCEF(modifiers);
+
         if (browserControls) {
-            if (modifiers == GLFW_MOD_CONTROL) {
+            if (normalizedModifiers == GLFW_MOD_CONTROL) {
                 if (keyCode == GLFW_KEY_R) {
                     reload();
                     return;
@@ -412,7 +420,7 @@ public class MCEFBrowser extends CefBrowserOsr {
                     setZoomLevel(0);
                     return;
                 }
-            } else if (modifiers == GLFW_MOD_ALT) {
+            } else if (normalizedModifiers == GLFW_MOD_ALT) {
                 if (keyCode == GLFW_KEY_LEFT && canGoBack()) {
                     goBack();
                     return;
@@ -423,44 +431,78 @@ public class MCEFBrowser extends CefBrowserOsr {
             }
         }
 
-        CefKeyEvent e = new CefKeyEvent(CefKeyEvent.KEY_PRESS, keyCode, (char) keyCode, modifiers);
+        CefKeyEvent e = new CefKeyEvent(CefKeyEvent.KEY_PRESS, keyCode, (char) keyCode, normalizedModifiers);
         e.scancode = scanCode;
         sendKeyEvent(e);
     }
 
     public void sendKeyRelease(int keyCode, long scanCode, int modifiers) {
+        int normalizedModifiers = normalizeAltGrModifiers_MCEF(modifiers);
+
         if (browserControls) {
-            if (modifiers == GLFW_MOD_CONTROL) {
+            if (normalizedModifiers == GLFW_MOD_CONTROL) {
                 if (keyCode == GLFW_KEY_R) return;
                 else if (keyCode == GLFW_KEY_EQUAL) return;
                 else if (keyCode == GLFW_KEY_MINUS) return;
                 else if (keyCode == GLFW_KEY_0) return;
-            } else if (modifiers == GLFW_MOD_ALT) {
+            } else if (normalizedModifiers == GLFW_MOD_ALT) {
                 if (keyCode == GLFW_KEY_LEFT && canGoBack()) return;
                 else if (keyCode == GLFW_KEY_RIGHT && canGoForward()) return;
             }
         }
 
-        CefKeyEvent e = new CefKeyEvent(CefKeyEvent.KEY_RELEASE, keyCode, (char) keyCode, modifiers);
+        CefKeyEvent e = new CefKeyEvent(CefKeyEvent.KEY_RELEASE, keyCode, (char) keyCode, normalizedModifiers);
         e.scancode = scanCode;
         sendKeyEvent(e);
+        updateModifierStateOnKeyRelease_MCEF(keyCode);
     }
 
     public void sendKeyTyped(char c, int modifiers) {
+        int normalizedModifiers = normalizeAltGrModifiers_MCEF(modifiers);
+
         if (browserControls) {
-            if (modifiers == GLFW_MOD_CONTROL) {
+            if (normalizedModifiers == GLFW_MOD_CONTROL) {
                 if ((int) c == GLFW_KEY_R) return;
                 else if ((int) c == GLFW_KEY_EQUAL) return;
                 else if ((int) c == GLFW_KEY_MINUS) return;
                 else if ((int) c == GLFW_KEY_0) return;
-            } else if (modifiers == GLFW_MOD_ALT) {
+            } else if (normalizedModifiers == GLFW_MOD_ALT) {
                 if ((int) c == GLFW_KEY_LEFT && canGoBack()) return;
                 else if ((int) c == GLFW_KEY_RIGHT && canGoForward()) return;
             }
         }
 
-        CefKeyEvent e = new CefKeyEvent(CefKeyEvent.KEY_TYPE, c, c, modifiers);
+        CefKeyEvent e = new CefKeyEvent(CefKeyEvent.KEY_TYPE, c, c, normalizedModifiers);
         sendKeyEvent(e);
+    }
+
+    private void updateModifierStateOnKeyPress_MCEF(int keyCode) {
+        if (keyCode == GLFW_KEY_RIGHT_ALT) {
+            rightAltDown_MCEF = true;
+        }
+    }
+
+    private void updateModifierStateOnKeyRelease_MCEF(int keyCode) {
+        if (keyCode == GLFW_KEY_RIGHT_ALT) {
+            rightAltDown_MCEF = false;
+        }
+    }
+
+    private int normalizeAltGrModifiers_MCEF(int modifiers) {
+        if (rightAltDown_MCEF && (modifiers & GLFW_MOD_ALT) == 0) {
+            rightAltDown_MCEF = false;
+        }
+
+        // GLFW reports AltGr as Ctrl+Alt on many layouts.
+        if (!rightAltDown_MCEF) {
+            return modifiers;
+        }
+
+        if ((modifiers & GLFW_MOD_CONTROL) == 0 || (modifiers & GLFW_MOD_ALT) == 0) {
+            return modifiers;
+        }
+
+        return modifiers & ~(GLFW_MOD_CONTROL | GLFW_MOD_ALT);
     }
 
     public void sendMouseMove(int mouseX, int mouseY) {
