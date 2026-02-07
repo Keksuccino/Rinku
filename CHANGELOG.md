@@ -81,6 +81,11 @@
 - Runtime binary downloads now use GitHub release assets from `Keksuccino/mcef_resources`.
   - Official source moved to `https://github.com/Keksuccino/mcef_resources/releases/download`.
   - Java-CEF assets are resolved from release tags in the format `java-cef-<commit>`.
+- Browser profile data (cookies/storage/cache) now uses an OS app-data directory outside the Minecraft game directory.
+  - Windows: `%LOCALAPPDATA%/MCEF` (fallbacks to `%APPDATA%` or `%USERPROFILE%/AppData/Local/MCEF`).
+  - macOS: `~/Library/Application Support/MCEF`.
+  - Linux: `$XDG_DATA_HOME/mcef` (fallback `~/.local/share/mcef`).
+  - Session cookies are now explicitly persisted when `use-cache=true`.
 - Improved the in-dev example browser screen.
   - Added URL bar with live address updates and Enter-to-navigate behavior.
   - Added Back/Forward/Reload navigation buttons.
