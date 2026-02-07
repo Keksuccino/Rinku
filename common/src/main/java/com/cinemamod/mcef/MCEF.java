@@ -466,8 +466,17 @@ public final class MCEF {
      * Helper method to get a GLFW cursor handle for the given {@link CefCursorType} cursor type
      */
     static long getGLFWCursorHandle(CefCursorType cursorType) {
+        if (cursorType == null || cursorType.glfwId == 0) {
+            // Use the operating system default cursor for unmapped/unsupported CEF cursor types.
+            return 0L;
+        }
+
         if (CEF_TO_GLFW_CURSORS.containsKey(cursorType)) return CEF_TO_GLFW_CURSORS.get(cursorType);
         long glfwCursorHandle = GLFW.glfwCreateStandardCursor(cursorType.glfwId);
+        if (glfwCursorHandle == 0L) {
+            // Fallback to OS default cursor if GLFW can't create the requested cursor.
+            return 0L;
+        }
         CEF_TO_GLFW_CURSORS.put(cursorType, glfwCursorHandle);
         return glfwCursorHandle;
     }

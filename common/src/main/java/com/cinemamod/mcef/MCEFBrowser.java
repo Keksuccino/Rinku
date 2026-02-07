@@ -85,7 +85,7 @@ public class MCEFBrowser extends CefBrowserOsr {
     public MCEFBrowser(MCEFClient client, String url, boolean transparent) {
         super(client.getHandle(), url, transparent, null);
         renderer = new MCEFRenderer(transparent);
-        cursorChangeListener = (cefCursorID) -> setCursor(CefCursorType.fromId(cefCursorID));
+        cursorChangeListener = (cefCursorID) -> setCursor(resolveCursorType_MCEF(cefCursorID));
 
         if (RenderSystem.isOnRenderThread()) {
             renderer.initialize();
@@ -599,6 +599,14 @@ public class MCEFBrowser extends CefBrowserOsr {
             GLFW.glfwSetInputMode(Minecraft.getInstance().getWindow().handle(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);
             GLFW.glfwSetCursor(Minecraft.getInstance().getWindow().handle(), MCEF.getGLFWCursorHandle(cursorType));
         }
+    }
+
+    private static CefCursorType resolveCursorType_MCEF(int cursorTypeId) {
+        CefCursorType[] cursorTypes = CefCursorType.values();
+        if (cursorTypeId < 0 || cursorTypeId >= cursorTypes.length) {
+            return CefCursorType.POINTER;
+        }
+        return cursorTypes[cursorTypeId];
     }
 
 }

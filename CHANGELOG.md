@@ -47,6 +47,9 @@ All notable changes to this project are documented in this file.
   - Added support for `x86_64` and `arm64` aliases.
 - Fixed checksum parser compatibility in `MCEFDownloader`.
   - Parser now accepts common `.sha256` text layouts by extracting a valid SHA-256 token from content.
+- Fixed intermittent GLFW cursor GL errors when opening browsers.
+  - Mapped unsupported/unavailable CEF cursor shapes to OS default cursor instead of creating invalid GLFW standard cursors.
+  - Added safe fallback for invalid/out-of-range cursor IDs.
 
 ### Security
 - Hardened runtime archive extraction against path traversal and link-based abuse.
