@@ -23,6 +23,9 @@ All notable changes to this project are documented in this file.
   - `download-max-extracted-bytes`
   - `cef-disable-web-security`
   - `cef-enable-widevine-cdm`
+- Added warm browser preloading for faster first-use browser startup.
+  - Added `browser-preload-enabled`, `browser-preload-transparent-pool-size`, and `browser-preload-opaque-pool-size` settings.
+  - Browser preload pools now refresh immediately when those settings are changed at runtime.
 
 ### Fixed
 - Fixed infinite recursion in `MCEFBrowser.startDragging(...)`.
@@ -33,6 +36,11 @@ All notable changes to this project are documented in this file.
 - Fixed render-thread safety for browser texture uploads.
   - `MCEFBrowser` now dispatches off-thread paint work to the Minecraft render thread.
   - `MCEFRenderer` now asserts render-thread usage in paint upload methods.
+  - `MCEFBrowser` now initializes renderer textures immediately when already on the render thread.
+- Fixed warm browser preload lifecycle/threading edge cases.
+  - Preload tasks now execute through Minecraft's thread submit path (instead of a separate preload executor).
+  - Preload tasks now re-check live settings before pooling a browser.
+  - Shutdown now blocks further preload creation before CEF teardown.
 - Fixed handler list concurrency risks in `MCEFClient`.
   - Switched handler collections to `CopyOnWriteArrayList`.
 - Fixed platform architecture detection gaps in `MCEFPlatform`.

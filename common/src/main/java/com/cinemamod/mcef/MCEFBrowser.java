@@ -87,7 +87,11 @@ public class MCEFBrowser extends CefBrowserOsr {
         renderer = new MCEFRenderer(transparent);
         cursorChangeListener = (cefCursorID) -> setCursor(CefCursorType.fromId(cefCursorID));
 
-        Minecraft.getInstance().submit(renderer::initialize);
+        if (RenderSystem.isOnRenderThread()) {
+            renderer.initialize();
+        } else {
+            Minecraft.getInstance().submit(renderer::initialize);
+        }
     }
 
     public MCEFRenderer getRenderer() {

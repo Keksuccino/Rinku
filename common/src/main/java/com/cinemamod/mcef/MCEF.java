@@ -22,6 +22,7 @@ package com.cinemamod.mcef;
 
 import com.cinemamod.mcef.listeners.MCEFInitListener;
 import com.cinemamod.mcef.mixins.MixinMinecraft;
+import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import org.cef.misc.CefCursorType;
 import org.lwjgl.glfw.GLFW;
@@ -45,10 +46,17 @@ public final class MCEF {
     public static final String MOD_ID = "mcef";
 
     private static MCEFSettings settings;
-    private static MCEFApp app;
-    private static MCEFClient client;
+    private static volatile MCEFApp app;
+    private static volatile MCEFClient client;
 
     private static final ArrayList<MCEFInitListener> awaitingInit = new ArrayList<>();
+    private static final String PRELOADED_BROWSER_START_URL = "about:blank";
+    private static final Object PRELOADED_BROWSER_POOL_LOCK = new Object();
+    private static final Deque<MCEFBrowser> PRELOADED_TRANSPARENT_BROWSERS = new ArrayDeque<>();
+    private static final Deque<MCEFBrowser> PRELOADED_OPAQUE_BROWSERS = new ArrayDeque<>();
+    private static int preloadTransparentInFlight;
+    private static int preloadOpaqueInFlight;
+    private static boolean preloadPoolClosed = true;
 
     public static void scheduleForInit(MCEFInitListener task) {
         awaitingInit.add(task);
@@ -83,6 +91,19 @@ public final class MCEF {
         if (CefUtil.init()) {
             app = new MCEFApp(CefUtil.getCefApp());
             client = new MCEFClient(CefUtil.getCefClient());
+            List<MCEFBrowser> stalePreloadedBrowsers = new ArrayList<>();
+            synchronized (PRELOADED_BROWSER_POOL_LOCK) {
+                stalePreloadedBrowsers.addAll(PRELOADED_TRANSPARENT_BROWSERS);
+                stalePreloadedBrowsers.addAll(PRELOADED_OPAQUE_BROWSERS);
+                PRELOADED_TRANSPARENT_BROWSERS.clear();
+                PRELOADED_OPAQUE_BROWSERS.clear();
+                preloadTransparentInFlight = 0;
+                preloadOpaqueInFlight = 0;
+                preloadPoolClosed = false;
+            }
+            for (MCEFBrowser browser : stalePreloadedBrowsers) {
+                closeBrowserQuietly(browser);
+            }
 
             awaitingInit.forEach(t -> t.onInit(true));
             awaitingInit.clear();
@@ -92,6 +113,7 @@ public final class MCEF {
                     "mod", "",
                     (browser, frame, url, request) -> new ModScheme(request.getURL())
             );
+            prefillPreloadedBrowserPoolsAsync();
 
             // Handle shutdown events, macOS is special
             // These are important; the jcef process will linger around if not done
@@ -138,10 +160,12 @@ public final class MCEF {
      * @return the {@link MCEFBrowser} web browser instance
      */
     public static MCEFBrowser createBrowser(String url, boolean transparent) {
+        if (!RenderSystem.isOnRenderThread()) {
+            return Minecraft.getInstance().submit(() -> createBrowser(url, transparent)).join();
+        }
         assertInitialized();
-        MCEFBrowser browser = new MCEFBrowser(client, url, transparent);
-        browser.setCloseAllowed();
-        browser.createImmediately();
+        synchronizePreloadedBrowserPools();
+        MCEFBrowser browser = acquireOrCreateBrowser(url, transparent);
         return browser;
     }
 
@@ -152,12 +176,21 @@ public final class MCEF {
      * @return the {@link MCEFBrowser} web browser instance
      */
     public static MCEFBrowser createBrowser(String url, boolean transparent, int width, int height) {
+        if (!RenderSystem.isOnRenderThread()) {
+            return Minecraft.getInstance().submit(() -> createBrowser(url, transparent, width, height)).join();
+        }
         assertInitialized();
-        MCEFBrowser browser = new MCEFBrowser(client, url, transparent);
-        browser.setCloseAllowed();
-        browser.createImmediately();
+        synchronizePreloadedBrowserPools();
+        MCEFBrowser browser = acquireOrCreateBrowser(url, transparent);
         browser.resize(width, height);
         return browser;
+    }
+
+    public static void refreshPreloadedBrowserPool() {
+        if (!isInitialized()) {
+            return;
+        }
+        synchronizePreloadedBrowserPools();
     }
 
     /**
@@ -172,10 +205,18 @@ public final class MCEF {
      * Request a shutdown of MCEF/CEF. Nothing will happen if not initialized.
      */
     public static void shutdown() {
-        if (isInitialized()) {
+        synchronized (PRELOADED_BROWSER_POOL_LOCK) {
+            preloadPoolClosed = true;
+        }
+
+        boolean hadInitializedCef = CefUtil.isInit();
+        client = null;
+        app = null;
+
+        closeUnusedPreloadedBrowsers();
+
+        if (hadInitializedCef) {
             CefUtil.shutdown();
-            client = null;
-            app = null;
         }
     }
 
@@ -185,6 +226,195 @@ public final class MCEF {
     public static void assertInitialized() {
         if (!isInitialized())
             throw new RuntimeException("Chromium Embedded Framework was never initialized.");
+    }
+
+    private static MCEFBrowser acquireOrCreateBrowser(String url, boolean transparent) {
+        MCEFBrowser browser = null;
+        if (getPreloadedBrowserPoolTarget(transparent) > 0) {
+            synchronized (PRELOADED_BROWSER_POOL_LOCK) {
+                Deque<MCEFBrowser> pool = getPreloadedBrowserPool(transparent);
+                browser = pool.pollFirst();
+            }
+        }
+
+        if (browser != null) {
+            if (url != null) {
+                browser.loadURL(url);
+            }
+            schedulePreloadedBrowserRefill(transparent);
+            return browser;
+        }
+
+        browser = createBrowserImmediately(url, transparent);
+        schedulePreloadedBrowserRefill(transparent);
+        return browser;
+    }
+
+    private static MCEFBrowser createBrowserImmediately(String url, boolean transparent) {
+        MCEFClient currentClient = client;
+        if (currentClient == null) {
+            throw new IllegalStateException("Chromium Embedded Framework was never initialized.");
+        }
+        MCEFBrowser browser = new MCEFBrowser(currentClient, url, transparent);
+        browser.setCloseAllowed();
+        browser.createImmediately();
+        return browser;
+    }
+
+    private static void prefillPreloadedBrowserPoolsAsync() {
+        schedulePreloadedBrowserRefill(true);
+        schedulePreloadedBrowserRefill(false);
+    }
+
+    private static void synchronizePreloadedBrowserPools() {
+        schedulePreloadedBrowserRefill(true);
+        schedulePreloadedBrowserRefill(false);
+    }
+
+    private static void schedulePreloadedBrowserRefill(boolean transparent) {
+        int targetSize = getPreloadedBrowserPoolTarget(transparent);
+        List<MCEFBrowser> extraBrowsers = new ArrayList<>();
+        int toPreload = 0;
+        boolean canPreload;
+
+        synchronized (PRELOADED_BROWSER_POOL_LOCK) {
+            Deque<MCEFBrowser> pool = getPreloadedBrowserPool(transparent);
+            while (pool.size() > targetSize) {
+                extraBrowsers.add(pool.removeLast());
+            }
+
+            canPreload = isInitialized() && !preloadPoolClosed && targetSize > 0;
+
+            if (canPreload) {
+                int inFlight = transparent ? preloadTransparentInFlight : preloadOpaqueInFlight;
+                toPreload = targetSize - pool.size() - inFlight;
+                if (toPreload > 0) {
+                    if (transparent) {
+                        preloadTransparentInFlight += toPreload;
+                    } else {
+                        preloadOpaqueInFlight += toPreload;
+                    }
+                }
+            }
+        }
+
+        for (MCEFBrowser browser : extraBrowsers) {
+            closeBrowserQuietly(browser);
+        }
+
+        if (!canPreload || toPreload <= 0) {
+            return;
+        }
+
+        for (int i = 0; i < toPreload; i++) {
+            submitPreloadBrowserTask(transparent);
+        }
+    }
+
+    private static void submitPreloadBrowserTask(boolean transparent) {
+        try {
+            Minecraft.getInstance().submit(() -> preloadBrowser(transparent));
+        } catch (Throwable throwable) {
+            decrementPreloadInFlight(transparent);
+            MCEF.getLogger().warn(
+                    "Failed to submit {} browser preload task",
+                    transparent ? "transparent" : "opaque",
+                    throwable
+            );
+        }
+    }
+
+    private static void preloadBrowser(boolean transparent) {
+        MCEFBrowser preloadedBrowser = null;
+        boolean pooled = false;
+        try {
+            synchronized (PRELOADED_BROWSER_POOL_LOCK) {
+                if (preloadPoolClosed) {
+                    return;
+                }
+            }
+
+            if (!isInitialized()) {
+                return;
+            }
+
+            preloadedBrowser = createBrowserImmediately(PRELOADED_BROWSER_START_URL, transparent);
+
+            synchronized (PRELOADED_BROWSER_POOL_LOCK) {
+                int targetSize = getPreloadedBrowserPoolTarget(transparent);
+                Deque<MCEFBrowser> pool = getPreloadedBrowserPool(transparent);
+                if (!preloadPoolClosed && isInitialized() && targetSize > 0 && pool.size() < targetSize) {
+                    pool.offerLast(preloadedBrowser);
+                    pooled = true;
+                }
+            }
+        } catch (Throwable throwable) {
+            MCEF.getLogger().warn(
+                    "Failed to preload {} browser",
+                    transparent ? "transparent" : "opaque",
+                    throwable
+            );
+        } finally {
+            decrementPreloadInFlight(transparent);
+
+            if (!pooled && preloadedBrowser != null) {
+                closeBrowserQuietly(preloadedBrowser);
+            }
+        }
+    }
+
+    private static int getPreloadedBrowserPoolTarget(boolean transparent) {
+        MCEFSettings currentSettings = getSettings();
+        if (!currentSettings.isBrowserPreloadEnabled()) {
+            return 0;
+        }
+        return transparent
+                ? currentSettings.getBrowserPreloadTransparentPoolSize()
+                : currentSettings.getBrowserPreloadOpaquePoolSize();
+    }
+
+    private static Deque<MCEFBrowser> getPreloadedBrowserPool(boolean transparent) {
+        return transparent ? PRELOADED_TRANSPARENT_BROWSERS : PRELOADED_OPAQUE_BROWSERS;
+    }
+
+    private static void closeUnusedPreloadedBrowsers() {
+        List<MCEFBrowser> browsersToClose = new ArrayList<>();
+        synchronized (PRELOADED_BROWSER_POOL_LOCK) {
+            preloadPoolClosed = true;
+            browsersToClose.addAll(PRELOADED_TRANSPARENT_BROWSERS);
+            browsersToClose.addAll(PRELOADED_OPAQUE_BROWSERS);
+            PRELOADED_TRANSPARENT_BROWSERS.clear();
+            PRELOADED_OPAQUE_BROWSERS.clear();
+            preloadTransparentInFlight = 0;
+            preloadOpaqueInFlight = 0;
+        }
+
+        for (MCEFBrowser browser : browsersToClose) {
+            closeBrowserQuietly(browser);
+        }
+    }
+
+    private static void decrementPreloadInFlight(boolean transparent) {
+        synchronized (PRELOADED_BROWSER_POOL_LOCK) {
+            if (transparent) {
+                if (preloadTransparentInFlight > 0) {
+                    preloadTransparentInFlight--;
+                }
+                return;
+            }
+
+            if (preloadOpaqueInFlight > 0) {
+                preloadOpaqueInFlight--;
+            }
+        }
+    }
+
+    private static void closeBrowserQuietly(MCEFBrowser browser) {
+        try {
+            browser.close();
+        } catch (Throwable throwable) {
+            MCEF.getLogger().warn("Failed to close preloaded browser", throwable);
+        }
     }
 
     /**

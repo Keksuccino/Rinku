@@ -49,6 +49,9 @@ public class MCEFSettings {
     private static final long DEFAULT_DOWNLOAD_MAX_EXTRACTED_BYTES = 2_000L * 1024L * 1024L;
     private static final boolean DEFAULT_CEF_DISABLE_WEB_SECURITY = true;
     private static final boolean DEFAULT_CEF_ENABLE_WIDEVINE_CDM = true;
+    private static final boolean DEFAULT_BROWSER_PRELOAD_ENABLED = true;
+    private static final int DEFAULT_BROWSER_PRELOAD_TRANSPARENT_POOL_SIZE = 1;
+    private static final int DEFAULT_BROWSER_PRELOAD_OPAQUE_POOL_SIZE = 1;
 
     private boolean skipDownload;
     private String downloadMirror;
@@ -63,6 +66,9 @@ public class MCEFSettings {
     private boolean useCache;
     private boolean cefDisableWebSecurity;
     private boolean cefEnableWidevineCdm;
+    private boolean browserPreloadEnabled;
+    private int browserPreloadTransparentPoolSize;
+    private int browserPreloadOpaquePoolSize;
 
     public MCEFSettings() {
         resetDefaults();
@@ -82,6 +88,9 @@ public class MCEFSettings {
         useCache = true;
         cefDisableWebSecurity = DEFAULT_CEF_DISABLE_WEB_SECURITY;
         cefEnableWidevineCdm = DEFAULT_CEF_ENABLE_WIDEVINE_CDM;
+        browserPreloadEnabled = DEFAULT_BROWSER_PRELOAD_ENABLED;
+        browserPreloadTransparentPoolSize = DEFAULT_BROWSER_PRELOAD_TRANSPARENT_POOL_SIZE;
+        browserPreloadOpaquePoolSize = DEFAULT_BROWSER_PRELOAD_OPAQUE_POOL_SIZE;
     }
 
     public boolean isSkipDownload() {
@@ -201,6 +210,48 @@ public class MCEFSettings {
         saveAsync();
     }
 
+    public boolean isBrowserPreloadEnabled() {
+        return browserPreloadEnabled;
+    }
+
+    public void setBrowserPreloadEnabled(boolean browserPreloadEnabled) {
+        this.browserPreloadEnabled = browserPreloadEnabled;
+        saveAsync();
+        MCEF.refreshPreloadedBrowserPool();
+    }
+
+    public int getBrowserPreloadTransparentPoolSize() {
+        return browserPreloadTransparentPoolSize;
+    }
+
+    public void setBrowserPreloadTransparentPoolSize(int browserPreloadTransparentPoolSize) {
+        this.browserPreloadTransparentPoolSize = clampInt(
+                browserPreloadTransparentPoolSize,
+                0,
+                4,
+                DEFAULT_BROWSER_PRELOAD_TRANSPARENT_POOL_SIZE,
+                "browser-preload-transparent-pool-size"
+        );
+        saveAsync();
+        MCEF.refreshPreloadedBrowserPool();
+    }
+
+    public int getBrowserPreloadOpaquePoolSize() {
+        return browserPreloadOpaquePoolSize;
+    }
+
+    public void setBrowserPreloadOpaquePoolSize(int browserPreloadOpaquePoolSize) {
+        this.browserPreloadOpaquePoolSize = clampInt(
+                browserPreloadOpaquePoolSize,
+                0,
+                4,
+                DEFAULT_BROWSER_PRELOAD_OPAQUE_POOL_SIZE,
+                "browser-preload-opaque-pool-size"
+        );
+        saveAsync();
+        MCEF.refreshPreloadedBrowserPool();
+    }
+
     public MCEFDownloader.DownloadPolicy createDownloadPolicy() {
         return new MCEFDownloader.DownloadPolicy(
                 downloadMirrorPolicy,
@@ -246,6 +297,9 @@ public class MCEFSettings {
         properties.setProperty("use-cache", String.valueOf(useCache));
         properties.setProperty("cef-disable-web-security", String.valueOf(cefDisableWebSecurity));
         properties.setProperty("cef-enable-widevine-cdm", String.valueOf(cefEnableWidevineCdm));
+        properties.setProperty("browser-preload-enabled", String.valueOf(browserPreloadEnabled));
+        properties.setProperty("browser-preload-transparent-pool-size", String.valueOf(browserPreloadTransparentPoolSize));
+        properties.setProperty("browser-preload-opaque-pool-size", String.valueOf(browserPreloadOpaquePoolSize));
 
         try (FileOutputStream output = new FileOutputStream(file)) {
             properties.store(output, null);
@@ -280,6 +334,21 @@ public class MCEFSettings {
         useCache = parseBoolean(properties, "use-cache", useCache);
         cefDisableWebSecurity = parseBoolean(properties, "cef-disable-web-security", cefDisableWebSecurity);
         cefEnableWidevineCdm = parseBoolean(properties, "cef-enable-widevine-cdm", cefEnableWidevineCdm);
+        browserPreloadEnabled = parseBoolean(properties, "browser-preload-enabled", browserPreloadEnabled);
+        browserPreloadTransparentPoolSize = parseInt(
+                properties,
+                "browser-preload-transparent-pool-size",
+                browserPreloadTransparentPoolSize,
+                0,
+                4
+        );
+        browserPreloadOpaquePoolSize = parseInt(
+                properties,
+                "browser-preload-opaque-pool-size",
+                browserPreloadOpaquePoolSize,
+                0,
+                4
+        );
     }
 
     private static MCEFDownloader.MirrorPolicy parseMirrorPolicy(String raw, MCEFDownloader.MirrorPolicy fallback) {
