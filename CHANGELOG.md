@@ -25,7 +25,7 @@
     - Default is `LOGSEVERITY_DISABLE` (no website console messages forwarded to MC log).
 - Added warm browser preloading for faster first-use browser startup.
   - Added `browser-preload-enabled`, `browser-preload-transparent-pool-size`, and `browser-preload-opaque-pool-size` settings.
-  - Browser preload pools now refresh immediately when those settings are changed at runtime.
+  - Browser preload pools refresh immediately when those settings are changed at runtime.
   - Preloading is lifecycle-safe: tasks are submitted on Minecraft's thread path, re-check live settings before pooling, and stop before CEF teardown during shutdown.
 
 ### Fixed
