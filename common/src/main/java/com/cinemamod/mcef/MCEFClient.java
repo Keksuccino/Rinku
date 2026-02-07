@@ -147,7 +147,13 @@ public class MCEFClient implements CefLoadHandler, CefContextMenuHandler, CefDis
         for (CefDisplayHandler displayHandler : displayHandlers)
             if (displayHandler.onConsoleMessage(browser, level, message, source, line))
                 return true;
-        return false;
+
+        if (shouldForwardConsoleMessageToMcLog_MCEF(level)) {
+            logConsoleMessageToMcLog_MCEF(browser, level, message, source, line);
+        }
+
+        // Always consume here so CEF doesn't bypass our filtering and spam the process console.
+        return true;
     }
 
     @Override
@@ -220,5 +226,59 @@ public class MCEFClient implements CefLoadHandler, CefContextMenuHandler, CefDis
             return;
         }
         downloadHandlers.get(0).onDownloadUpdated(browser, downloadItem, callback);
+    }
+
+    private static boolean shouldForwardConsoleMessageToMcLog_MCEF(CefSettings.LogSeverity level) {
+        CefSettings.LogSeverity threshold = MCEF.getSettings().getConsoleLogForwardingMinSeverity();
+        CefSettings.LogSeverity effectiveThreshold = threshold == null
+                ? CefSettings.LogSeverity.LOGSEVERITY_DISABLE
+                : threshold;
+        if (effectiveThreshold == CefSettings.LogSeverity.LOGSEVERITY_DISABLE) {
+            return false;
+        }
+
+        CefSettings.LogSeverity effectiveLevel = level == null
+                ? CefSettings.LogSeverity.LOGSEVERITY_DEFAULT
+                : level;
+        return getSeverityRank_MCEF(effectiveLevel) >= getSeverityRank_MCEF(effectiveThreshold);
+    }
+
+    private static int getSeverityRank_MCEF(CefSettings.LogSeverity severity) {
+        return switch (severity) {
+            case LOGSEVERITY_VERBOSE -> 0;
+            case LOGSEVERITY_DEFAULT, LOGSEVERITY_INFO -> 1;
+            case LOGSEVERITY_WARNING -> 2;
+            case LOGSEVERITY_ERROR -> 3;
+            case LOGSEVERITY_FATAL -> 4;
+            case LOGSEVERITY_DISABLE -> 5;
+        };
+    }
+
+    private static void logConsoleMessageToMcLog_MCEF(
+            CefBrowser browser,
+            CefSettings.LogSeverity level,
+            String message,
+            String source,
+            int line
+    ) {
+        int browserId = browser == null ? -1 : browser.getIdentifier();
+        String sourceValue = source == null || source.isBlank() ? "<unknown>" : source;
+        String messageValue = message == null ? "<null>" : message;
+        CefSettings.LogSeverity effectiveLevel = level == null
+                ? CefSettings.LogSeverity.LOGSEVERITY_DEFAULT
+                : level;
+
+        switch (effectiveLevel) {
+            case LOGSEVERITY_VERBOSE -> MCEF.getLogger().debug("[CEF Console][{}] {}:{} - {}", browserId, sourceValue, line, messageValue);
+            case LOGSEVERITY_DEFAULT, LOGSEVERITY_INFO ->
+                    MCEF.getLogger().info("[CEF Console][{}] {}:{} - {}", browserId, sourceValue, line, messageValue);
+            case LOGSEVERITY_WARNING ->
+                    MCEF.getLogger().warn("[CEF Console][{}] {}:{} - {}", browserId, sourceValue, line, messageValue);
+            case LOGSEVERITY_ERROR, LOGSEVERITY_FATAL ->
+                    MCEF.getLogger().error("[CEF Console][{}] {}:{} - {}", browserId, sourceValue, line, messageValue);
+            case LOGSEVERITY_DISABLE -> {
+                // Nothing to forward.
+            }
+        }
     }
 }

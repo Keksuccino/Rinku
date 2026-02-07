@@ -1,9 +1,5 @@
 # Changelog
 
-All notable changes to this project are documented in this file.
-
-## [Unreleased]
-
 ### Added
 - Added native file download support in the MCEF client wrapper.
   - `MCEFClient` now implements `CefDownloadHandler`.
@@ -23,6 +19,8 @@ All notable changes to this project are documented in this file.
   - `download-max-extracted-bytes`
   - `cef-disable-web-security`
   - `cef-enable-widevine-cdm`
+  - `cef-console-log-forwarding-min-severity`
+    - Default is `LOGSEVERITY_DISABLE` (no website console messages forwarded to MC log).
 - Added warm browser preloading for faster first-use browser startup.
   - Added `browser-preload-enabled`, `browser-preload-transparent-pool-size`, and `browser-preload-opaque-pool-size` settings.
   - Browser preload pools now refresh immediately when those settings are changed at runtime.
@@ -41,6 +39,9 @@ All notable changes to this project are documented in this file.
   - Preload tasks now execute through Minecraft's thread submit path (instead of a separate preload executor).
   - Preload tasks now re-check live settings before pooling a browser.
   - Shutdown now blocks further preload creation before CEF teardown.
+- Fixed website console warning/error spam bypassing MCEF logging controls.
+  - Console messages are now always consumed by `MCEFClient` to prevent unfiltered CEF console output.
+  - Console messages are now forwarded to Minecraft logs only when they meet the configured severity threshold.
 - Fixed handler list concurrency risks in `MCEFClient`.
   - Switched handler collections to `CopyOnWriteArrayList`.
 - Fixed platform architecture detection gaps in `MCEFPlatform`.
@@ -77,17 +78,3 @@ All notable changes to this project are documented in this file.
   - Reset download listener state at startup.
   - Improved failure reporting paths.
   - `skip-download=true` now requires platform-specific runtime directory existence.
-
-### Build
-- Hardened dependency repository scoping in root Gradle scripts.
-  - Added `exclusiveContent` repository filters in `build.gradle`.
-  - Added `exclusiveContent` plugin repository filters in `settings.gradle`.
-- Added optional dependency locking scaffolding in `build.gradle`.
-  - Locking is behind `-Pmcef.enableDependencyLocking=true`.
-- Narrowed JitPack filter scope to avoid forcing unrelated `com.github.*` artifacts to JitPack.
-  - Limited to explicitly needed groups.
-- Removed incompatible `dependencyVerification {}` block from `settings.gradle` after environment compatibility failure.
-
-### Reverted
-- Reverted a temporary logging change made in `common/java-cef`.
-  - Final state keeps `common/java-cef` unchanged.

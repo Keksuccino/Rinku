@@ -21,6 +21,7 @@
 package com.cinemamod.mcef;
 
 import net.minecraft.client.Minecraft;
+import org.cef.CefSettings;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -49,6 +50,7 @@ public class MCEFSettings {
     private static final long DEFAULT_DOWNLOAD_MAX_EXTRACTED_BYTES = 2_000L * 1024L * 1024L;
     private static final boolean DEFAULT_CEF_DISABLE_WEB_SECURITY = true;
     private static final boolean DEFAULT_CEF_ENABLE_WIDEVINE_CDM = true;
+    private static final CefSettings.LogSeverity DEFAULT_CONSOLE_LOG_FORWARDING_MIN_SEVERITY = CefSettings.LogSeverity.LOGSEVERITY_DISABLE;
     private static final boolean DEFAULT_BROWSER_PRELOAD_ENABLED = true;
     private static final int DEFAULT_BROWSER_PRELOAD_TRANSPARENT_POOL_SIZE = 1;
     private static final int DEFAULT_BROWSER_PRELOAD_OPAQUE_POOL_SIZE = 1;
@@ -66,6 +68,7 @@ public class MCEFSettings {
     private boolean useCache;
     private boolean cefDisableWebSecurity;
     private boolean cefEnableWidevineCdm;
+    private CefSettings.LogSeverity consoleLogForwardingMinSeverity;
     private boolean browserPreloadEnabled;
     private int browserPreloadTransparentPoolSize;
     private int browserPreloadOpaquePoolSize;
@@ -88,6 +91,7 @@ public class MCEFSettings {
         useCache = true;
         cefDisableWebSecurity = DEFAULT_CEF_DISABLE_WEB_SECURITY;
         cefEnableWidevineCdm = DEFAULT_CEF_ENABLE_WIDEVINE_CDM;
+        consoleLogForwardingMinSeverity = DEFAULT_CONSOLE_LOG_FORWARDING_MIN_SEVERITY;
         browserPreloadEnabled = DEFAULT_BROWSER_PRELOAD_ENABLED;
         browserPreloadTransparentPoolSize = DEFAULT_BROWSER_PRELOAD_TRANSPARENT_POOL_SIZE;
         browserPreloadOpaquePoolSize = DEFAULT_BROWSER_PRELOAD_OPAQUE_POOL_SIZE;
@@ -210,6 +214,17 @@ public class MCEFSettings {
         saveAsync();
     }
 
+    public CefSettings.LogSeverity getConsoleLogForwardingMinSeverity() {
+        return consoleLogForwardingMinSeverity;
+    }
+
+    public void setConsoleLogForwardingMinSeverity(CefSettings.LogSeverity consoleLogForwardingMinSeverity) {
+        this.consoleLogForwardingMinSeverity = consoleLogForwardingMinSeverity == null
+                ? DEFAULT_CONSOLE_LOG_FORWARDING_MIN_SEVERITY
+                : consoleLogForwardingMinSeverity;
+        saveAsync();
+    }
+
     public boolean isBrowserPreloadEnabled() {
         return browserPreloadEnabled;
     }
@@ -297,6 +312,7 @@ public class MCEFSettings {
         properties.setProperty("use-cache", String.valueOf(useCache));
         properties.setProperty("cef-disable-web-security", String.valueOf(cefDisableWebSecurity));
         properties.setProperty("cef-enable-widevine-cdm", String.valueOf(cefEnableWidevineCdm));
+        properties.setProperty("cef-console-log-forwarding-min-severity", consoleLogForwardingMinSeverity.name());
         properties.setProperty("browser-preload-enabled", String.valueOf(browserPreloadEnabled));
         properties.setProperty("browser-preload-transparent-pool-size", String.valueOf(browserPreloadTransparentPoolSize));
         properties.setProperty("browser-preload-opaque-pool-size", String.valueOf(browserPreloadOpaquePoolSize));
@@ -334,6 +350,11 @@ public class MCEFSettings {
         useCache = parseBoolean(properties, "use-cache", useCache);
         cefDisableWebSecurity = parseBoolean(properties, "cef-disable-web-security", cefDisableWebSecurity);
         cefEnableWidevineCdm = parseBoolean(properties, "cef-enable-widevine-cdm", cefEnableWidevineCdm);
+        consoleLogForwardingMinSeverity = parseLogSeverity(
+                properties.getProperty("cef-console-log-forwarding-min-severity"),
+                consoleLogForwardingMinSeverity,
+                "cef-console-log-forwarding-min-severity"
+        );
         browserPreloadEnabled = parseBoolean(properties, "browser-preload-enabled", browserPreloadEnabled);
         browserPreloadTransparentPoolSize = parseInt(
                 properties,
@@ -360,6 +381,26 @@ public class MCEFSettings {
             return MCEFDownloader.MirrorPolicy.valueOf(normalized);
         } catch (IllegalArgumentException e) {
             MCEF.getLogger().warn("Invalid mcef.properties value for download-mirror-policy: {}", raw);
+            return fallback;
+        }
+    }
+
+    private static CefSettings.LogSeverity parseLogSeverity(String raw, CefSettings.LogSeverity fallback, String key) {
+        if (raw == null || raw.isBlank()) {
+            return fallback;
+        }
+
+        String normalized = raw.trim().toUpperCase(Locale.ROOT).replace('-', '_');
+        if ("OFF".equals(normalized) || "NONE".equals(normalized)) {
+            normalized = "LOGSEVERITY_DISABLE";
+        } else if (!normalized.startsWith("LOGSEVERITY_")) {
+            normalized = "LOGSEVERITY_" + normalized;
+        }
+
+        try {
+            return CefSettings.LogSeverity.valueOf(normalized);
+        } catch (IllegalArgumentException e) {
+            MCEF.getLogger().warn("Invalid mcef.properties value for {}: {}", key, raw);
             return fallback;
         }
     }
