@@ -73,6 +73,9 @@
 - Website console messages are now filtered by `cef-console-log-forwarding-min-severity` in `MCEFSettings`.
   - `MCEFClient` always consumes CEF console callbacks to prevent unfiltered direct console spam.
   - Forwarding to Minecraft log occurs only when message severity meets the configured threshold.
+- Runtime binary downloads now use GitHub release assets from `Keksuccino/mcef_resources`.
+  - Official source moved to `https://github.com/Keksuccino/mcef_resources/releases/download`.
+  - Java-CEF assets are resolved from release tags in the format `java-cef-<commit>`.
 - Improved downloader startup flow in `MixinClientPackSource`.
   - Reset download listener state at startup.
   - Improved failure reporting paths.

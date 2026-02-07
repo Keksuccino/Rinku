@@ -473,6 +473,11 @@ public class MCEFSettings {
         }
 
         String trimmed = stripTrailingSlash(value.trim());
+        if (trimmed.equalsIgnoreCase(stripTrailingSlash(MCEFDownloader.LEGACY_OFFICIAL_MIRROR))) {
+            LOGGER.warn("Replacing legacy download mirror {} with {}", MCEFDownloader.LEGACY_OFFICIAL_MIRROR, MCEFDownloader.OFFICIAL_MIRROR);
+            return MCEFDownloader.OFFICIAL_MIRROR;
+        }
+
         try {
             URI uri = new URI(trimmed);
             if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost() == null) {

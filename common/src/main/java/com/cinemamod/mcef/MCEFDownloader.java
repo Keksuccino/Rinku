@@ -57,17 +57,19 @@ import java.util.regex.Pattern;
 /**
  * A downloader and extraction tool for java-cef builds.
  * <p>
- * Downloads for <a href="https://github.com/CinemaMod/java-cef">CinemaMod java-cef</a> are provided by the CinemaMod Group unless changed
- * in the MCEFSettings properties file; see {@link MCEFSettings}.
- * Email ds58@mailbox.org for any questions or concerns regarding the file hosting.
+ * Downloads for <a href="https://github.com/CinemaMod/java-cef">CinemaMod java-cef</a> are provided by
+ * <a href="https://github.com/Keksuccino/mcef_resources">mcef_resources</a> unless changed in the
+ * MCEFSettings properties file; see {@link MCEFSettings}.
  */
 public class MCEFDownloader {
     private static final Logger LOGGER = LoggerFactory.getLogger("MCEF");
 
-    public static final String OFFICIAL_MIRROR = "https://mcef-download.cinemamod.com";
+    public static final String OFFICIAL_MIRROR = "https://github.com/Keksuccino/mcef_resources/releases/download";
+    public static final String LEGACY_OFFICIAL_MIRROR = "https://mcef-download.cinemamod.com";
 
-    private static final String JAVA_CEF_DOWNLOAD_URL = "{host}/java-cef-builds/{java-cef-commit}/{platform}.tar.gz";
-    private static final String JAVA_CEF_CHECKSUM_DOWNLOAD_URL = "{host}/java-cef-builds/{java-cef-commit}/{platform}.tar.gz.sha256";
+    private static final String JAVA_CEF_RELEASE_TAG_TEMPLATE = "java-cef-{java-cef-commit}";
+    private static final String JAVA_CEF_DOWNLOAD_URL = "{host}/{java-cef-tag}/{platform}.tar.gz";
+    private static final String JAVA_CEF_CHECKSUM_DOWNLOAD_URL = "{host}/{java-cef-tag}/{platform}.tar.gz.sha256";
     private static final int DOWNLOAD_BUFFER_SIZE_BYTES = 16 * 1024;
     private static final int EXTRACT_BUFFER_SIZE_BYTES = 16 * 1024;
     private static final Pattern SHA256_TOKEN_PATTERN = Pattern.compile("(?i)\\b[0-9a-f]{64}\\b");
@@ -142,8 +144,10 @@ public class MCEFDownloader {
     }
 
     private String formatURL(String url, String downloadHost) {
+        String javaCefTag = JAVA_CEF_RELEASE_TAG_TEMPLATE.replace("{java-cef-commit}", javaCefCommitHash);
         return url
                 .replace("{host}", downloadHost)
+                .replace("{java-cef-tag}", javaCefTag)
                 .replace("{java-cef-commit}", javaCefCommitHash)
                 .replace("{platform}", platform.getNormalizedName());
     }
@@ -218,7 +222,13 @@ public class MCEFDownloader {
             }
         }
 
-        throw new IOException("Failed to download " + outputFile.getName() + " from configured mirrors", lastException);
+        throw new IOException(
+                "Failed to download " + outputFile.getName() + " from configured mirrors. " +
+                        "Ensure mcef_resources release tag " + JAVA_CEF_RELEASE_TAG_TEMPLATE.replace("{java-cef-commit}", javaCefCommitHash) + " contains assets " +
+                        platform.getNormalizedName() + ".tar.gz and " +
+                        platform.getNormalizedName() + ".tar.gz.sha256",
+                lastException
+        );
     }
 
     private void downloadFile(String urlString, File outputFile, long maxBytes) throws IOException {
@@ -392,7 +402,7 @@ public class MCEFDownloader {
     }
 
     private List<String> resolveMirrorCandidates() {
-        String configuredMirror = sanitizeMirror(host);
+        String configuredMirror = normalizeMirror(sanitizeMirror(host));
         Set<String> uniqueMirrors = new LinkedHashSet<>();
 
         switch (downloadPolicy.mirrorPolicy()) {
@@ -415,6 +425,17 @@ public class MCEFDownloader {
             uniqueMirrors.add(OFFICIAL_MIRROR);
         }
         return new ArrayList<>(uniqueMirrors);
+    }
+
+    private String normalizeMirror(String mirror) {
+        if (mirror == null) {
+            return null;
+        }
+        if (stripTrailingSlash(LEGACY_OFFICIAL_MIRROR).equalsIgnoreCase(mirror)) {
+            LOGGER.warn("Legacy MCEF mirror {} is no longer supported; using {}.", LEGACY_OFFICIAL_MIRROR, OFFICIAL_MIRROR);
+            return OFFICIAL_MIRROR;
+        }
+        return mirror;
     }
 
     private static String stripTrailingSlash(String value) {
