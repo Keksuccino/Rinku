@@ -1,5 +1,7 @@
 # Changelog
 
+## [2.2.0]
+
 ### Added
 - Added native file download support in the MCEF client wrapper.
   - `MCEFClient` now implements `CefDownloadHandler`.
@@ -24,6 +26,7 @@
 - Added warm browser preloading for faster first-use browser startup.
   - Added `browser-preload-enabled`, `browser-preload-transparent-pool-size`, and `browser-preload-opaque-pool-size` settings.
   - Browser preload pools now refresh immediately when those settings are changed at runtime.
+  - Preloading is lifecycle-safe: tasks are submitted on Minecraft's thread path, re-check live settings before pooling, and stop before CEF teardown during shutdown.
 
 ### Fixed
 - Fixed infinite recursion in `MCEFBrowser.startDragging(...)`.
@@ -35,13 +38,6 @@
   - `MCEFBrowser` now dispatches off-thread paint work to the Minecraft render thread.
   - `MCEFRenderer` now asserts render-thread usage in paint upload methods.
   - `MCEFBrowser` now initializes renderer textures immediately when already on the render thread.
-- Fixed warm browser preload lifecycle/threading edge cases.
-  - Preload tasks now execute through Minecraft's thread submit path (instead of a separate preload executor).
-  - Preload tasks now re-check live settings before pooling a browser.
-  - Shutdown now blocks further preload creation before CEF teardown.
-- Fixed website console warning/error spam bypassing MCEF logging controls.
-  - Console messages are now always consumed by `MCEFClient` to prevent unfiltered CEF console output.
-  - Console messages are now forwarded to Minecraft logs only when they meet the configured severity threshold.
 - Fixed handler list concurrency risks in `MCEFClient`.
   - Switched handler collections to `CopyOnWriteArrayList`.
 - Fixed platform architecture detection gaps in `MCEFPlatform`.
@@ -74,6 +70,9 @@
   - Both toggles are currently defaulted to opt-out behavior:
     - `cef-disable-web-security=true` by default.
     - `cef-enable-widevine-cdm=true` by default.
+- Website console messages are now filtered by `cef-console-log-forwarding-min-severity` in `MCEFSettings`.
+  - `MCEFClient` always consumes CEF console callbacks to prevent unfiltered direct console spam.
+  - Forwarding to Minecraft log occurs only when message severity meets the configured threshold.
 - Improved downloader startup flow in `MixinClientPackSource`.
   - Reset download listener state at startup.
   - Improved failure reporting paths.
