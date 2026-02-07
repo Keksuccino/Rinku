@@ -24,28 +24,33 @@ import org.cef.CefClient;
 import org.cef.CefSettings;
 import org.cef.browser.CefBrowser;
 import org.cef.browser.CefFrame;
+import org.cef.callback.CefBeforeDownloadCallback;
 import org.cef.callback.CefContextMenuParams;
+import org.cef.callback.CefDownloadItem;
+import org.cef.callback.CefDownloadItemCallback;
 import org.cef.callback.CefMenuModel;
 import org.cef.handler.CefAudioHandler;
 import org.cef.handler.CefContextMenuHandler;
 import org.cef.handler.CefDisplayHandler;
+import org.cef.handler.CefDownloadHandler;
 import org.cef.handler.CefLoadHandler;
 import org.cef.misc.CefAudioParameters;
 import org.cef.misc.DataPointer;
 import org.cef.network.CefRequest;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * A wrapper around {@link CefClient}
  */
-public class MCEFClient implements CefLoadHandler, CefContextMenuHandler, CefDisplayHandler, CefAudioHandler {
+public class MCEFClient implements CefLoadHandler, CefContextMenuHandler, CefDisplayHandler, CefAudioHandler, CefDownloadHandler {
     private final CefClient handle;
-    private final List<CefLoadHandler> loadHandlers = new ArrayList<>();
-    private final List<CefContextMenuHandler> contextMenuHandlers = new ArrayList<>();
-    private final List<CefDisplayHandler> displayHandlers = new ArrayList<>();
-    private final List<CefAudioHandler> audioHandlers = new ArrayList<>();
+    private final List<CefLoadHandler> loadHandlers = new CopyOnWriteArrayList<>();
+    private final List<CefContextMenuHandler> contextMenuHandlers = new CopyOnWriteArrayList<>();
+    private final List<CefDisplayHandler> displayHandlers = new CopyOnWriteArrayList<>();
+    private final List<CefAudioHandler> audioHandlers = new CopyOnWriteArrayList<>();
+    private final List<CefDownloadHandler> downloadHandlers = new CopyOnWriteArrayList<>();
 
     public MCEFClient(CefClient cefClient) {
         handle = cefClient;
@@ -53,6 +58,7 @@ public class MCEFClient implements CefLoadHandler, CefContextMenuHandler, CefDis
         cefClient.addContextMenuHandler(this);
         cefClient.addDisplayHandler(this);
         cefClient.addAudioHandler(this);
+        cefClient.addDownloadHandler(this);
     }
 
     public CefClient getHandle() {
@@ -192,5 +198,27 @@ public class MCEFClient implements CefLoadHandler, CefContextMenuHandler, CefDis
             audioHandler.onAudioStreamError(browser, text);
         }
         MCEF.getLogger().warn("An audio stream threw an error: " + text);
+    }
+
+    public void addDownloadHandler(CefDownloadHandler handler) {
+        downloadHandlers.add(handler);
+    }
+
+    @Override
+    public void onBeforeDownload(CefBrowser browser, CefDownloadItem downloadItem, String suggestedName, CefBeforeDownloadCallback callback) {
+        if (downloadHandlers.isEmpty()) {
+            // Open the native Save As dialog. Canceling the dialog cancels the download.
+            callback.Continue(suggestedName == null ? "" : suggestedName, true);
+            return;
+        }
+        downloadHandlers.get(0).onBeforeDownload(browser, downloadItem, suggestedName, callback);
+    }
+
+    @Override
+    public void onDownloadUpdated(CefBrowser browser, CefDownloadItem downloadItem, CefDownloadItemCallback callback) {
+        if (downloadHandlers.isEmpty()) {
+            return;
+        }
+        downloadHandlers.get(0).onDownloadUpdated(browser, downloadItem, callback);
     }
 }

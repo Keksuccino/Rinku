@@ -72,37 +72,79 @@ subprojects {
 
     repositories {
         mavenCentral()
-        maven {
-            name = 'Sponge / Mixin'
-            url = 'https://repo.spongepowered.org/repository/maven-public/'
-            content {
+
+        exclusiveContent {
+            forRepository {
+                maven {
+                    name = 'Sponge / Mixin'
+                    url = 'https://repo.spongepowered.org/repository/maven-public/'
+                }
+            }
+            filter {
                 includeGroup 'org.spongepowered'
                 includeGroup 'org.spongepowered.mixin'
             }
         }
-        maven {
-            url "https://cursemaven.com"
-            content {
+
+        exclusiveContent {
+            forRepository {
+                maven {
+                    name = "CurseMaven"
+                    url = "https://cursemaven.com"
+                }
+            }
+            filter {
                 includeGroup "curse.maven"
             }
         }
-        maven {
-            url "https://api.modrinth.com/maven"
-            content {
+
+        exclusiveContent {
+            forRepository {
+                maven {
+                    name = "Modrinth"
+                    url = "https://api.modrinth.com/maven"
+                }
+            }
+            filter {
                 includeGroup "maven.modrinth"
             }
         }
-        maven {
-            url 'https://jitpack.io'
-            content {
-                includeGroupByRegex 'com\\.github\\..*'
+
+        exclusiveContent {
+            forRepository {
+                maven {
+                    name = "JitPack"
+                    url = 'https://jitpack.io'
+                }
+            }
+            filter {
+                includeGroup 'com.github.rtyley'
+                includeGroup 'com.github.DhyanB'
             }
         }
-        maven { url = "https://keksuccino.github.io/maven/" }
-        maven {
-            name = 'ParchmentMC Maven'
-            url = 'https://maven.parchmentmc.org'
-            content {
+
+        exclusiveContent {
+            forRepository {
+                maven {
+                    name = "Keksuccino"
+                    url = "https://keksuccino.github.io/maven/"
+                }
+            }
+            filter {
+                includeGroupByRegex 'com\\.github\\.Keksuccino(\\..*)?'
+                includeGroupByRegex 'com\\.keksuccino(\\..*)?'
+                includeGroupByRegex 'de\\.keksuccino(\\..*)?'
+            }
+        }
+
+        exclusiveContent {
+            forRepository {
+                maven {
+                    name = 'ParchmentMC Maven'
+                    url = 'https://maven.parchmentmc.org'
+                }
+            }
+            filter {
                 includeGroupByRegex 'org\\.parchmentmc(\\..*)?'
             }
         }
@@ -142,6 +184,15 @@ subprojects {
                     component.changing = false
                 }
             }
+        }
+    }
+
+    if (providers.gradleProperty("mcef.enableDependencyLocking").map { it.toBoolean() }.orElse(false).get()) {
+        dependencyLocking {
+            // Enable with -Pmcef.enableDependencyLocking=true and generate/update locks via:
+            // ./gradlew --write-locks <task>
+            lockMode = org.gradle.api.artifacts.dsl.LockMode.LENIENT
+            lockAllConfigurations()
         }
     }
 

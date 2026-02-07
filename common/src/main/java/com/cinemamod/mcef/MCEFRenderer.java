@@ -111,6 +111,7 @@ public class MCEFRenderer {
     }
 
     protected void onPaint(ByteBuffer buffer, int width, int height) {
+        RenderSystem.assertOnRenderThread();
         // Create or recreate texture if size changed
         if (texture == null || textureWidth != width || textureHeight != height) {
             if (texture != null) {
@@ -157,6 +158,7 @@ public class MCEFRenderer {
     }
 
     protected void onPaint(ByteBuffer buffer, int x, int y, int width, int height) {
+        RenderSystem.assertOnRenderThread();
         if (texture instanceof GlTexture glTexture) {
             // Bind and update sub-region
             GlStateManager._bindTexture(glTexture.glId());

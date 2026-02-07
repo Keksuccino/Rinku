@@ -26,7 +26,10 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.file.Path;
+import java.util.Locale;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 
@@ -36,18 +39,49 @@ public class MCEFSettings {
             .resolve("config")
             .resolve("mcef")
             .resolve("mcef.properties");
-    private static int deleteRetries = 0;
+    private static final String DEFAULT_DOWNLOAD_MIRROR = MCEFDownloader.OFFICIAL_MIRROR;
+    private static final MCEFDownloader.MirrorPolicy DEFAULT_DOWNLOAD_MIRROR_POLICY = MCEFDownloader.MirrorPolicy.OFFICIAL_ONLY;
+    private static final boolean DEFAULT_ENFORCE_DOWNLOAD_CHECKSUMS = true;
+    private static final int DEFAULT_DOWNLOAD_CONNECT_TIMEOUT_MS = 15_000;
+    private static final int DEFAULT_DOWNLOAD_READ_TIMEOUT_MS = 60_000;
+    private static final long DEFAULT_DOWNLOAD_MAX_ARCHIVE_BYTES = 750L * 1024L * 1024L;
+    private static final long DEFAULT_DOWNLOAD_MAX_CHECKSUM_BYTES = 64L * 1024L;
+    private static final long DEFAULT_DOWNLOAD_MAX_EXTRACTED_BYTES = 2_000L * 1024L * 1024L;
+    private static final boolean DEFAULT_CEF_DISABLE_WEB_SECURITY = true;
+    private static final boolean DEFAULT_CEF_ENABLE_WIDEVINE_CDM = true;
 
     private boolean skipDownload;
     private String downloadMirror;
+    private MCEFDownloader.MirrorPolicy downloadMirrorPolicy;
+    private boolean enforceDownloadChecksums;
+    private int downloadConnectTimeoutMs;
+    private int downloadReadTimeoutMs;
+    private long downloadMaxArchiveBytes;
+    private long downloadMaxChecksumBytes;
+    private long downloadMaxExtractedBytes;
     private String userAgent;
     private boolean useCache;
+    private boolean cefDisableWebSecurity;
+    private boolean cefEnableWidevineCdm;
 
     public MCEFSettings() {
+        resetDefaults();
+    }
+
+    private void resetDefaults() {
         skipDownload = false;
-        downloadMirror = "https://mcef-download.cinemamod.com";
+        downloadMirror = DEFAULT_DOWNLOAD_MIRROR;
+        downloadMirrorPolicy = DEFAULT_DOWNLOAD_MIRROR_POLICY;
+        enforceDownloadChecksums = DEFAULT_ENFORCE_DOWNLOAD_CHECKSUMS;
+        downloadConnectTimeoutMs = DEFAULT_DOWNLOAD_CONNECT_TIMEOUT_MS;
+        downloadReadTimeoutMs = DEFAULT_DOWNLOAD_READ_TIMEOUT_MS;
+        downloadMaxArchiveBytes = DEFAULT_DOWNLOAD_MAX_ARCHIVE_BYTES;
+        downloadMaxChecksumBytes = DEFAULT_DOWNLOAD_MAX_CHECKSUM_BYTES;
+        downloadMaxExtractedBytes = DEFAULT_DOWNLOAD_MAX_EXTRACTED_BYTES;
         userAgent = null;
         useCache = true;
+        cefDisableWebSecurity = DEFAULT_CEF_DISABLE_WEB_SECURITY;
+        cefEnableWidevineCdm = DEFAULT_CEF_ENABLE_WIDEVINE_CDM;
     }
 
     public boolean isSkipDownload() {
@@ -64,7 +98,70 @@ public class MCEFSettings {
     }
 
     public void setDownloadMirror(String downloadMirror) {
-        this.downloadMirror = downloadMirror;
+        this.downloadMirror = parseMirror(downloadMirror, DEFAULT_DOWNLOAD_MIRROR, "download-mirror");
+        saveAsync();
+    }
+
+    public MCEFDownloader.MirrorPolicy getDownloadMirrorPolicy() {
+        return downloadMirrorPolicy;
+    }
+
+    public void setDownloadMirrorPolicy(MCEFDownloader.MirrorPolicy downloadMirrorPolicy) {
+        this.downloadMirrorPolicy = downloadMirrorPolicy == null ? DEFAULT_DOWNLOAD_MIRROR_POLICY : downloadMirrorPolicy;
+        saveAsync();
+    }
+
+    public boolean isEnforceDownloadChecksums() {
+        return enforceDownloadChecksums;
+    }
+
+    public void setEnforceDownloadChecksums(boolean enforceDownloadChecksums) {
+        this.enforceDownloadChecksums = enforceDownloadChecksums;
+        saveAsync();
+    }
+
+    public int getDownloadConnectTimeoutMs() {
+        return downloadConnectTimeoutMs;
+    }
+
+    public void setDownloadConnectTimeoutMs(int downloadConnectTimeoutMs) {
+        this.downloadConnectTimeoutMs = clampInt(downloadConnectTimeoutMs, 1000, 300_000, DEFAULT_DOWNLOAD_CONNECT_TIMEOUT_MS, "download-connect-timeout-ms");
+        saveAsync();
+    }
+
+    public int getDownloadReadTimeoutMs() {
+        return downloadReadTimeoutMs;
+    }
+
+    public void setDownloadReadTimeoutMs(int downloadReadTimeoutMs) {
+        this.downloadReadTimeoutMs = clampInt(downloadReadTimeoutMs, 1000, 300_000, DEFAULT_DOWNLOAD_READ_TIMEOUT_MS, "download-read-timeout-ms");
+        saveAsync();
+    }
+
+    public long getDownloadMaxArchiveBytes() {
+        return downloadMaxArchiveBytes;
+    }
+
+    public void setDownloadMaxArchiveBytes(long downloadMaxArchiveBytes) {
+        this.downloadMaxArchiveBytes = clampLong(downloadMaxArchiveBytes, 1_048_576L, 5_000L * 1024L * 1024L, DEFAULT_DOWNLOAD_MAX_ARCHIVE_BYTES, "download-max-archive-bytes");
+        saveAsync();
+    }
+
+    public long getDownloadMaxChecksumBytes() {
+        return downloadMaxChecksumBytes;
+    }
+
+    public void setDownloadMaxChecksumBytes(long downloadMaxChecksumBytes) {
+        this.downloadMaxChecksumBytes = clampLong(downloadMaxChecksumBytes, 512L, 1_048_576L, DEFAULT_DOWNLOAD_MAX_CHECKSUM_BYTES, "download-max-checksum-bytes");
+        saveAsync();
+    }
+
+    public long getDownloadMaxExtractedBytes() {
+        return downloadMaxExtractedBytes;
+    }
+
+    public void setDownloadMaxExtractedBytes(long downloadMaxExtractedBytes) {
+        this.downloadMaxExtractedBytes = clampLong(downloadMaxExtractedBytes, 1_048_576L, 10_000L * 1024L * 1024L, DEFAULT_DOWNLOAD_MAX_EXTRACTED_BYTES, "download-max-extracted-bytes");
         saveAsync();
     }
 
@@ -73,7 +170,7 @@ public class MCEFSettings {
     }
 
     public void setUserAgent(String userAgent) {
-        this.userAgent = userAgent;
+        this.userAgent = parseUserAgent(userAgent);
         saveAsync();
     }
 
@@ -86,12 +183,42 @@ public class MCEFSettings {
         saveAsync();
     }
 
+    public boolean isDisableWebSecurity() {
+        return cefDisableWebSecurity;
+    }
+
+    public void setDisableWebSecurity(boolean cefDisableWebSecurity) {
+        this.cefDisableWebSecurity = cefDisableWebSecurity;
+        saveAsync();
+    }
+
+    public boolean isEnableWidevineCdm() {
+        return cefEnableWidevineCdm;
+    }
+
+    public void setEnableWidevineCdm(boolean cefEnableWidevineCdm) {
+        this.cefEnableWidevineCdm = cefEnableWidevineCdm;
+        saveAsync();
+    }
+
+    public MCEFDownloader.DownloadPolicy createDownloadPolicy() {
+        return new MCEFDownloader.DownloadPolicy(
+                downloadMirrorPolicy,
+                enforceDownloadChecksums,
+                downloadConnectTimeoutMs,
+                downloadReadTimeoutMs,
+                downloadMaxArchiveBytes,
+                downloadMaxChecksumBytes,
+                downloadMaxExtractedBytes
+        );
+    }
+
     public void saveAsync() {
         CompletableFuture.runAsync(() -> {
             try {
                 save();
             } catch (IOException e) {
-                e.printStackTrace();
+                MCEF.getLogger().error("Failed to save MCEF settings", e);
             }
         });
     }
@@ -108,8 +235,17 @@ public class MCEFSettings {
         Properties properties = new Properties();
         properties.setProperty("skip-download", String.valueOf(skipDownload));
         properties.setProperty("download-mirror", String.valueOf(downloadMirror));
-        properties.setProperty("user-agent", String.valueOf(userAgent));
+        properties.setProperty("download-mirror-policy", downloadMirrorPolicy.name());
+        properties.setProperty("enforce-download-checksums", String.valueOf(enforceDownloadChecksums));
+        properties.setProperty("download-connect-timeout-ms", String.valueOf(downloadConnectTimeoutMs));
+        properties.setProperty("download-read-timeout-ms", String.valueOf(downloadReadTimeoutMs));
+        properties.setProperty("download-max-archive-bytes", String.valueOf(downloadMaxArchiveBytes));
+        properties.setProperty("download-max-checksum-bytes", String.valueOf(downloadMaxChecksumBytes));
+        properties.setProperty("download-max-extracted-bytes", String.valueOf(downloadMaxExtractedBytes));
+        properties.setProperty("user-agent", userAgent == null ? "" : userAgent);
         properties.setProperty("use-cache", String.valueOf(useCache));
+        properties.setProperty("cef-disable-web-security", String.valueOf(cefDisableWebSecurity));
+        properties.setProperty("cef-enable-widevine-cdm", String.valueOf(cefEnableWidevineCdm));
 
         try (FileOutputStream output = new FileOutputStream(file)) {
             properties.store(output, null);
@@ -129,17 +265,129 @@ public class MCEFSettings {
             properties.load(input);
         }
 
-        try {
-            skipDownload = Boolean.parseBoolean(properties.getProperty("skip-download"));
-            downloadMirror = properties.getProperty("download-mirror");
-            userAgent = properties.getProperty("user-agent");
-            useCache = Boolean.parseBoolean(properties.getProperty("use-cache"));
-        } catch (Exception e) {
-            // Delete and re-create the file if there was a parsing error
-            if (deleteRetries++ > 20)
-                return; // Stop gap
-            file.delete();
-            save();
+        resetDefaults();
+
+        skipDownload = parseBoolean(properties, "skip-download", skipDownload);
+        downloadMirror = parseMirror(properties.getProperty("download-mirror"), downloadMirror, "download-mirror");
+        downloadMirrorPolicy = parseMirrorPolicy(properties.getProperty("download-mirror-policy"), downloadMirrorPolicy);
+        enforceDownloadChecksums = parseBoolean(properties, "enforce-download-checksums", enforceDownloadChecksums);
+        downloadConnectTimeoutMs = parseInt(properties, "download-connect-timeout-ms", downloadConnectTimeoutMs, 1000, 300_000);
+        downloadReadTimeoutMs = parseInt(properties, "download-read-timeout-ms", downloadReadTimeoutMs, 1000, 300_000);
+        downloadMaxArchiveBytes = parseLong(properties, "download-max-archive-bytes", downloadMaxArchiveBytes, 1_048_576L, 5_000L * 1024L * 1024L);
+        downloadMaxChecksumBytes = parseLong(properties, "download-max-checksum-bytes", downloadMaxChecksumBytes, 512L, 1_048_576L);
+        downloadMaxExtractedBytes = parseLong(properties, "download-max-extracted-bytes", downloadMaxExtractedBytes, 1_048_576L, 10_000L * 1024L * 1024L);
+        userAgent = parseUserAgent(properties.getProperty("user-agent"));
+        useCache = parseBoolean(properties, "use-cache", useCache);
+        cefDisableWebSecurity = parseBoolean(properties, "cef-disable-web-security", cefDisableWebSecurity);
+        cefEnableWidevineCdm = parseBoolean(properties, "cef-enable-widevine-cdm", cefEnableWidevineCdm);
+    }
+
+    private static MCEFDownloader.MirrorPolicy parseMirrorPolicy(String raw, MCEFDownloader.MirrorPolicy fallback) {
+        if (raw == null || raw.isBlank()) {
+            return fallback;
         }
+        String normalized = raw.trim().toUpperCase(Locale.ROOT).replace('-', '_');
+        try {
+            return MCEFDownloader.MirrorPolicy.valueOf(normalized);
+        } catch (IllegalArgumentException e) {
+            MCEF.getLogger().warn("Invalid mcef.properties value for download-mirror-policy: {}", raw);
+            return fallback;
+        }
+    }
+
+    private static boolean parseBoolean(Properties properties, String key, boolean fallback) {
+        String raw = properties.getProperty(key);
+        if (raw == null || raw.isBlank()) {
+            return fallback;
+        }
+
+        return switch (raw.trim().toLowerCase(Locale.ROOT)) {
+            case "true", "1", "yes", "y", "on" -> true;
+            case "false", "0", "no", "n", "off" -> false;
+            default -> {
+                MCEF.getLogger().warn("Invalid mcef.properties value for {}: {}", key, raw);
+                yield fallback;
+            }
+        };
+    }
+
+    private static int parseInt(Properties properties, String key, int fallback, int min, int max) {
+        String raw = properties.getProperty(key);
+        if (raw == null || raw.isBlank()) {
+            return fallback;
+        }
+        try {
+            return clampInt(Integer.parseInt(raw.trim()), min, max, fallback, key);
+        } catch (NumberFormatException e) {
+            MCEF.getLogger().warn("Invalid mcef.properties value for {}: {}", key, raw);
+            return fallback;
+        }
+    }
+
+    private static long parseLong(Properties properties, String key, long fallback, long min, long max) {
+        String raw = properties.getProperty(key);
+        if (raw == null || raw.isBlank()) {
+            return fallback;
+        }
+        try {
+            return clampLong(Long.parseLong(raw.trim()), min, max, fallback, key);
+        } catch (NumberFormatException e) {
+            MCEF.getLogger().warn("Invalid mcef.properties value for {}: {}", key, raw);
+            return fallback;
+        }
+    }
+
+    private static int clampInt(int value, int min, int max, int fallback, String key) {
+        if (value < min || value > max) {
+            MCEF.getLogger().warn("Out of range mcef.properties value for {}: {}", key, value);
+            return fallback;
+        }
+        return value;
+    }
+
+    private static long clampLong(long value, long min, long max, long fallback, String key) {
+        if (value < min || value > max) {
+            MCEF.getLogger().warn("Out of range mcef.properties value for {}: {}", key, value);
+            return fallback;
+        }
+        return value;
+    }
+
+    private static String parseMirror(String value, String fallback, String key) {
+        if (value == null || value.isBlank()) {
+            return fallback;
+        }
+
+        String trimmed = stripTrailingSlash(value.trim());
+        try {
+            URI uri = new URI(trimmed);
+            if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost() == null) {
+                MCEF.getLogger().warn("Invalid mcef.properties value for {}: {}", key, value);
+                return fallback;
+            }
+            return trimmed;
+        } catch (URISyntaxException e) {
+            MCEF.getLogger().warn("Invalid mcef.properties value for {}: {}", key, value);
+            return fallback;
+        }
+    }
+
+    private static String parseUserAgent(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        if (trimmed.isEmpty() || "null".equalsIgnoreCase(trimmed)) {
+            return null;
+        }
+        return trimmed;
+    }
+
+    private static String stripTrailingSlash(String value) {
+        int end = value.length();
+        while (end > 0 && value.charAt(end - 1) == '/') {
+            end--;
+        }
+        return end == value.length() ? value : value.substring(0, end);
     }
 }

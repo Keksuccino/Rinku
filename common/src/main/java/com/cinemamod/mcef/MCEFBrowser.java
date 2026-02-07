@@ -22,6 +22,7 @@ package com.cinemamod.mcef;
 
 import com.cinemamod.mcef.listeners.MCEFCursorChangeListener;
 import com.mojang.blaze3d.opengl.GlStateManager;
+import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
 import org.cef.browser.CefBrowser;
@@ -76,10 +77,10 @@ public class MCEFBrowser extends CefBrowserOsr {
 
     // Data relating to popups and graphics
     // Marked as protected in-case a mod wants to extend MCEFBrowser and override the repaint logic
-    protected ByteBuffer popupGraphics;
-    protected Rectangle popupSize;
-    protected boolean showPopup = false;
-    protected boolean popupDrawn = false;
+    protected volatile ByteBuffer popupGraphics;
+    protected volatile Rectangle popupSize;
+    protected volatile boolean showPopup = false;
+    protected volatile boolean popupDrawn = false;
 
     public MCEFBrowser(MCEFClient client, String url, boolean transparent) {
         super(client.getHandle(), url, transparent, null);
@@ -145,95 +146,244 @@ public class MCEFBrowser extends CefBrowserOsr {
     public void onPopupShow(CefBrowser browser, boolean show) {
         super.onPopupShow(browser, show);
         showPopup = show;
-        if (!show) popupDrawn = false;
     }
 
     @Override
     public void onPopupSize(CefBrowser browser, Rectangle size) {
         super.onPopupSize(browser, size);
-        popupSize = size;
-        this.popupGraphics = ByteBuffer.allocateDirect(
-                size.width * size.height * 4
-        );
+        if (size == null || size.width <= 0 || size.height <= 0) {
+            popupSize = null;
+            popupGraphics = null;
+            popupDrawn = false;
+            return;
+        }
+
+        popupSize = new Rectangle(size);
+        int popupBufferSize = getRequiredBufferSize_MCEF(size.width, size.height);
+        if (popupBufferSize <= 0) {
+            popupGraphics = null;
+            popupDrawn = false;
+            return;
+        }
+
+        if (popupGraphics == null || popupGraphics.capacity() != popupBufferSize) {
+            popupGraphics = ByteBuffer.allocateDirect(popupBufferSize);
+        }
     }
 
     // Graphics
     @Override
     public void onPaint(CefBrowser browser, boolean popup, Rectangle[] dirtyRects, ByteBuffer buffer, int width, int height) {
-        // nothing to update
-        if (dirtyRects.length == 0)
+        if (dirtyRects == null || dirtyRects.length == 0 || buffer == null)
             return;
 
+        Rectangle[] dirtyRectsCopy = new Rectangle[dirtyRects.length];
+        for (int i = 0; i < dirtyRects.length; i++) {
+            Rectangle dirtyRect = dirtyRects[i];
+            dirtyRectsCopy[i] = dirtyRect == null ? null : new Rectangle(dirtyRect);
+        }
+
+        Rectangle popupRectSnapshot = popupSize == null ? null : new Rectangle(popupSize);
+        boolean showPopupSnapshot = showPopup;
+
+        if (RenderSystem.isOnRenderThread()) {
+            onPaintRenderThread_MCEF(
+                    popup,
+                    dirtyRectsCopy,
+                    buffer,
+                    width,
+                    height,
+                    popupRectSnapshot,
+                    showPopupSnapshot
+            );
+            return;
+        }
+
+        ByteBuffer bufferCopy = cloneBufferForAsyncPaint_MCEF(buffer);
+        Minecraft.getInstance().submit(() -> {
+            try {
+                onPaintRenderThread_MCEF(
+                        popup,
+                        dirtyRectsCopy,
+                        bufferCopy,
+                        width,
+                        height,
+                        popupRectSnapshot,
+                        showPopupSnapshot
+                );
+            } finally {
+                MemoryUtil.memFree(bufferCopy);
+            }
+        });
+    }
+
+    private void onPaintRenderThread_MCEF(
+            boolean popup,
+            Rectangle[] dirtyRects,
+            ByteBuffer buffer,
+            int width,
+            int height,
+            Rectangle popupRect,
+            boolean showPopupSnapshot
+    ) {
         if (!popup) {
             if (lastWidth != width || lastHeight != height) {
                 lastWidth = width;
                 lastHeight = height;
-                // upload full texture
-                // this also sets up the texture size and creates the texture
                 renderer.onPaint(buffer, width, height);
-            } else {
-                if (renderer.getTextureID() == 0) return;
-                GlStateManager._bindTexture(renderer.getTextureID());
-                GlStateManager._pixelStore(GL_UNPACK_ROW_LENGTH, width);
-                for (Rectangle dirtyRect : dirtyRects) {
-                    GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, dirtyRect.x);
-                    GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, dirtyRect.y);
-                    renderer.onPaint(buffer, dirtyRect.x, dirtyRect.y, dirtyRect.width, dirtyRect.height);
+                return;
+            }
+
+            if (renderer.getTextureID() == 0) {
+                return;
+            }
+
+            GlStateManager._bindTexture(renderer.getTextureID());
+            GlStateManager._pixelStore(GL_UNPACK_ROW_LENGTH, width);
+
+            for (Rectangle dirtyRect : dirtyRects) {
+                Rectangle clippedRect = clipRect_MCEF(dirtyRect, width, height);
+                if (clippedRect == null) {
+                    continue;
                 }
-                if ((popupDrawn || showPopup) && popupSize != null) {
-                    // interpret where the popup was as a dirty rect
-                    if (!showPopup) {
-                        // if the popup is not visible, just draw the contents of the buffer
-                        GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, popupSize.width);
-                        GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, popupSize.height);
-                        renderer.onPaint(buffer, popupSize.x, popupSize.y, popupSize.width, popupSize.height);
-                        popupGraphics = null;
-                        popupSize = null;
-                    } else if (popupDrawn) {
-                        // else, a use copy of the popup graphics, as it needs to remain visible
-                        // and for some reason that I do not for the life of me understand, chromium does not seem to keep this data in memory outside of the paint loop, meaning it has to be copied around, which wastes performance
-                        GlStateManager._pixelStore(GL_UNPACK_ROW_LENGTH, popupSize.width);
-                        GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, 0);
-                        GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, 0);
-                        renderer.onPaint(popupGraphics, popupSize.x, popupSize.y, popupSize.width, popupSize.height);
+
+                GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, clippedRect.x);
+                GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, clippedRect.y);
+                renderer.onPaint(buffer, clippedRect.x, clippedRect.y, clippedRect.width, clippedRect.height);
+            }
+
+            if ((popupDrawn || showPopupSnapshot) && popupRect != null) {
+                Rectangle clippedPopupRect = clipRect_MCEF(popupRect, width, height);
+                if (clippedPopupRect == null) {
+                    popupGraphics = null;
+                    popupSize = null;
+                    popupDrawn = false;
+                    return;
+                }
+
+                if (!showPopupSnapshot) {
+                    GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, clippedPopupRect.x);
+                    GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, clippedPopupRect.y);
+                    renderer.onPaint(buffer, clippedPopupRect.x, clippedPopupRect.y, clippedPopupRect.width, clippedPopupRect.height);
+                    popupGraphics = null;
+                    popupSize = null;
+                    popupDrawn = false;
+                } else if (popupDrawn) {
+                    ByteBuffer popupBuffer = popupGraphics;
+                    int requiredPopupBufferSize = getRequiredBufferSize_MCEF(popupRect.width, popupRect.height);
+                    if (popupBuffer == null || requiredPopupBufferSize <= 0 || popupBuffer.capacity() < requiredPopupBufferSize) {
+                        return;
                     }
+
+                    GlStateManager._pixelStore(GL_UNPACK_ROW_LENGTH, popupRect.width);
+                    GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, clippedPopupRect.x - popupRect.x);
+                    GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, clippedPopupRect.y - popupRect.y);
+                    renderer.onPaint(popupBuffer, clippedPopupRect.x, clippedPopupRect.y, clippedPopupRect.width, clippedPopupRect.height);
                 }
             }
         } else {
-            if (renderer.getTextureID() == 0) return;
+            if (popupRect == null || popupRect.width <= 0 || popupRect.height <= 0 || renderer.getTextureID() == 0) {
+                return;
+            }
+
             GlStateManager._bindTexture(renderer.getTextureID());
-            int start = buffer.capacity();
-            int end = 0;
+
+            ByteBuffer popupBuffer = popupGraphics;
+            int requiredPopupBufferSize = getRequiredBufferSize_MCEF(popupRect.width, popupRect.height);
+            if (requiredPopupBufferSize <= 0) {
+                popupGraphics = null;
+                popupDrawn = false;
+                return;
+            }
+
+            if (popupBuffer == null || popupBuffer.capacity() != requiredPopupBufferSize) {
+                popupBuffer = ByteBuffer.allocateDirect(requiredPopupBufferSize);
+                popupGraphics = popupBuffer;
+            }
+
+            boolean paintedAnyRect = false;
             for (Rectangle dirtyRect : dirtyRects) {
-                GlStateManager._pixelStore(GL_UNPACK_ROW_LENGTH, popupSize.width);
-                GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, dirtyRect.x);
-                GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, dirtyRect.y);
-                renderer.onPaint(buffer, popupSize.x + dirtyRect.x, popupSize.y + dirtyRect.y, dirtyRect.width, dirtyRect.height);
-
-                int rectStart = (dirtyRect.x + ((dirtyRect.y) * popupSize.width)) << 2;
-                if (rectStart < start) start = rectStart;
-
-                int rectEnd = ((dirtyRect.x + dirtyRect.width) + ((dirtyRect.y + popupSize.height) * dirtyRect.width)) << 2;
-                if (rectEnd > end) end = rectEnd;
-            }
-            if (start < 0) start = 0;
-            if (end > buffer.capacity()) end = buffer.capacity();
-
-            if (end > start) {
-                // TODO: check if it's more performant to go for row-wise copies or if it's better to just copy the updated region
-                if (this.popupGraphics != null) {
-                    long addrFrom = MemoryUtil.memAddress(buffer);
-                    long addrTo = MemoryUtil.memAddress(popupGraphics);
-                    MemoryUtil.memCopy(
-                            addrFrom + start,
-                            addrTo + start,
-                            (end - start)
-                    );
+                Rectangle clippedRect = clipRect_MCEF(dirtyRect, Math.min(width, popupRect.width), Math.min(height, popupRect.height));
+                if (clippedRect == null) {
+                    continue;
                 }
+
+                GlStateManager._pixelStore(GL_UNPACK_ROW_LENGTH, width);
+                GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, clippedRect.x);
+                GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, clippedRect.y);
+                renderer.onPaint(
+                        buffer,
+                        popupRect.x + clippedRect.x,
+                        popupRect.y + clippedRect.y,
+                        clippedRect.width,
+                        clippedRect.height
+                );
+
+                copyRectRows_MCEF(
+                        buffer,
+                        width,
+                        popupBuffer,
+                        popupRect.width,
+                        clippedRect
+                );
+                paintedAnyRect = true;
             }
 
-            popupDrawn = true;
+            popupDrawn = paintedAnyRect;
         }
+    }
+
+    private static void copyRectRows_MCEF(ByteBuffer src, int srcWidth, ByteBuffer dst, int dstWidth, Rectangle rect) {
+        long srcAddr = MemoryUtil.memAddress(src);
+        long dstAddr = MemoryUtil.memAddress(dst);
+        int bytesPerRow = rect.width << 2;
+        for (int row = 0; row < rect.height; row++) {
+            int srcOffset = ((rect.y + row) * srcWidth + rect.x) << 2;
+            int dstOffset = ((rect.y + row) * dstWidth + rect.x) << 2;
+            MemoryUtil.memCopy(srcAddr + srcOffset, dstAddr + dstOffset, bytesPerRow);
+        }
+    }
+
+    private static Rectangle clipRect_MCEF(Rectangle rect, int maxWidth, int maxHeight) {
+        if (rect == null || maxWidth <= 0 || maxHeight <= 0) {
+            return null;
+        }
+
+        int x = Math.max(0, rect.x);
+        int y = Math.max(0, rect.y);
+        int maxX = Math.min(maxWidth, rect.x + rect.width);
+        int maxY = Math.min(maxHeight, rect.y + rect.height);
+        int width = maxX - x;
+        int height = maxY - y;
+
+        if (width <= 0 || height <= 0) {
+            return null;
+        }
+
+        return new Rectangle(x, y, width, height);
+    }
+
+    private static int getRequiredBufferSize_MCEF(int width, int height) {
+        if (width <= 0 || height <= 0) {
+            return 0;
+        }
+
+        long bufferSize = (long) width * height * 4L;
+        if (bufferSize <= 0L || bufferSize > Integer.MAX_VALUE) {
+            return 0;
+        }
+
+        return (int) bufferSize;
+    }
+
+    private static ByteBuffer cloneBufferForAsyncPaint_MCEF(ByteBuffer source) {
+        ByteBuffer sourceSlice = source.duplicate();
+        sourceSlice.clear();
+
+        ByteBuffer copy = MemoryUtil.memAlloc(sourceSlice.remaining());
+        copy.put(sourceSlice);
+        copy.flip();
+        return copy;
     }
 
     public void resize(int width, int height) {
@@ -401,7 +551,7 @@ public class MCEFBrowser extends CefBrowserOsr {
 
     // Expose drag & drop functions
     public void startDragging(CefDragData dragData, int mask, int x, int y) { // Overload since the JCEF method requires a browser, which then goes unused
-        startDragging(dragData, mask, x, y);
+        startDragging(this, dragData, mask, x, y);
     }
 
     public void finishDragging(int x, int y) {

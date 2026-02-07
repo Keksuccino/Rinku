@@ -28,60 +28,20 @@ import java.io.IOException;
 public class MixinClientPackSource {
 
     @Inject(at = @At("HEAD"), method = "<clinit>")
-    private static void sinit(CallbackInfo callbackInfo) {
+    private static void on_clinit_MCEF(CallbackInfo callbackInfo) {
+        MCEFDownloadListener.INSTANCE.setDone(false);
+        MCEFDownloadListener.INSTANCE.setFailed(false);
+        MCEFDownloadListener.INSTANCE.setTask("Preparing Download");
+
         try {
             setupLibraryPath_MCEF();
         } catch (IOException e) {
-            e.printStackTrace();
+            failDownload_MCEF("Failed to prepare MCEF library paths", e);
+            return;
         }
 
-        Thread downloadThread = new Thread(() -> {
-            String javaCefCommit;
-
-            try {
-                javaCefCommit = MCEF.getJavaCefCommit();
-            } catch (IOException e) {
-                e.printStackTrace();
-                return;
-            }
-
-            MCEF.getLogger().info("java-cef commit: " + javaCefCommit);
-
-            MCEFSettings settings = MCEF.getSettings();
-            MCEFDownloader downloader = new MCEFDownloader(settings.getDownloadMirror(), javaCefCommit, MCEFPlatform.getPlatform());
-
-            boolean downloadJcefBuild;
-
-            // We always download the checksum for the java-cef build
-            // We will compare this with mcef-libraries/<platform>.tar.gz.sha256
-            // If the contents of the files differ (or it doesn't exist locally), we know we need to redownload JCEF
-            try {
-                downloadJcefBuild = !downloader.downloadJavaCefChecksum();
-            } catch (IOException e) {
-                MCEF.getLogger().error("Failed to download JCEF checksum.", e);
-                MCEFDownloadListener.INSTANCE.setFailed(true);
-                return;
-            }
-
-            // Ensure the mcef-libraries directory exists
-            // If not, we want to try redownloading
-            File mcefLibrariesDir = new File(System.getProperty("mcef.libraries.path"));
-            downloadJcefBuild |= !mcefLibrariesDir.exists();
-
-            if (downloadJcefBuild && !settings.isSkipDownload()) {
-                try {
-                    downloader.downloadJavaCefBuild();
-                } catch (IOException e) {
-                    MCEF.getLogger().error("Failed to download JCEF.", e);
-                    MCEFDownloadListener.INSTANCE.setFailed(true);
-                    return;
-                }
-
-                downloader.extractJavaCefBuild(true);
-            }
-
-            MCEFDownloadListener.INSTANCE.setDone(true);
-        });
+        Thread downloadThread = new Thread(MixinClientPackSource::runDownloaderFlow_MCEF, "MCEF-Downloader");
+        downloadThread.setDaemon(true);
         downloadThread.start();
     }
 
@@ -103,6 +63,78 @@ public class MixinClientPackSource {
 
         System.setProperty("mcef.libraries.path", mcefLibrariesDir.getCanonicalPath());
         System.setProperty("jcef.path", new File(mcefLibrariesDir, MCEFPlatform.getPlatform().getNormalizedName()).getCanonicalPath());
+    }
+
+    @Unique
+    private static void runDownloaderFlow_MCEF() {
+        try {
+            String javaCefCommit = MCEF.getJavaCefCommit();
+            MCEF.getLogger().info("java-cef commit: " + javaCefCommit);
+
+            MCEFSettings settings = MCEF.getSettings();
+            MCEFPlatform platform = MCEFPlatform.getPlatform();
+            MCEFDownloader downloader = new MCEFDownloader(
+                    settings.getDownloadMirror(),
+                    javaCefCommit,
+                    platform,
+                    settings.createDownloadPolicy()
+            );
+
+            File mcefLibrariesDir = new File(System.getProperty("mcef.libraries.path"));
+            File platformLibrariesDir = new File(mcefLibrariesDir, platform.getNormalizedName());
+            boolean hasPlatformLibrariesDir = platformLibrariesDir.exists() && platformLibrariesDir.isDirectory();
+
+            if (settings.isSkipDownload()) {
+                if (!hasPlatformLibrariesDir) {
+                    failDownload_MCEF("skip-download=true but local MCEF libraries are missing", null);
+                    return;
+                }
+                MCEFDownloadListener.INSTANCE.setDone(true);
+                return;
+            }
+
+            boolean hasChecksumResult = false;
+            boolean checksumMatches = false;
+            try {
+                checksumMatches = downloader.downloadJavaCefChecksum();
+                hasChecksumResult = true;
+            } catch (IOException e) {
+                if (settings.isEnforceDownloadChecksums()) {
+                    failDownload_MCEF("Failed to download JCEF checksum", e);
+                    return;
+                }
+                MCEF.getLogger().warn("Failed to download JCEF checksum with checksum enforcement disabled", e);
+            }
+
+            boolean downloadJcefBuild = !hasPlatformLibrariesDir || (hasChecksumResult && !checksumMatches);
+
+            if (downloadJcefBuild) {
+                try {
+                    downloader.downloadJavaCefBuild();
+                    downloader.extractJavaCefBuild(true);
+                } catch (IOException e) {
+                    failDownload_MCEF("Failed to download or extract JCEF", e);
+                    return;
+                }
+            }
+
+            MCEFDownloadListener.INSTANCE.setDone(true);
+        } catch (IOException e) {
+            failDownload_MCEF("Failed to initialize JCEF downloader", e);
+        } catch (RuntimeException e) {
+            failDownload_MCEF("JCEF downloader failed due to an invalid configuration", e);
+        }
+    }
+
+    @Unique
+    private static void failDownload_MCEF(String task, Exception e) {
+        if (e != null) {
+            MCEF.getLogger().error(task, e);
+        } else {
+            MCEF.getLogger().error(task);
+        }
+        MCEFDownloadListener.INSTANCE.setTask(task);
+        MCEFDownloadListener.INSTANCE.setFailed(true);
     }
 
 }
