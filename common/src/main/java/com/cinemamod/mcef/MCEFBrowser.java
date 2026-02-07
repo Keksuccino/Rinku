@@ -34,6 +34,8 @@ import org.cef.event.CefMouseWheelEvent;
 import org.cef.misc.CefCursorType;
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.system.MemoryUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.awt.*;
 import java.nio.ByteBuffer;
 import static org.lwjgl.opengl.GL11.*;
@@ -45,6 +47,8 @@ import static org.lwjgl.glfw.GLFW.*;
  * browser control shortcuts, cursor handling, drag & drop support.
  */
 public class MCEFBrowser extends CefBrowserOsr {
+    private static final Logger LOGGER = LoggerFactory.getLogger("MCEF");
+
     /**
      * The renderer for the browser.
      */
@@ -621,9 +625,31 @@ public class MCEFBrowser extends CefBrowserOsr {
 
     // Closing
     public void close() {
-        renderer.cleanup();
-        cursorChangeListener.onCursorChange(0);
+        cleanupBrowserResourcesOnRenderThread_MCEF();
         super.close(true);
+    }
+
+    private void cleanupBrowserResourcesOnRenderThread_MCEF() {
+        if (RenderSystem.isOnRenderThread()) {
+            renderer.cleanup();
+            cursorChangeListener.onCursorChange(0);
+            return;
+        }
+
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft == null || !minecraft.isRunning()) {
+            LOGGER.debug("Skipping browser GL cleanup because the Minecraft render thread is no longer running.");
+            return;
+        }
+
+        try {
+            minecraft.submit(() -> {
+                renderer.cleanup();
+                cursorChangeListener.onCursorChange(0);
+            }).join();
+        } catch (Throwable throwable) {
+            LOGGER.warn("Failed to marshal browser cleanup to the render thread.", throwable);
+        }
     }
 
     @Override

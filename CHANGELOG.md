@@ -45,6 +45,9 @@
   - Restored/kept the fast OpenGL upload path for native GL textures (including dirty-rect updates).
   - Added a compatibility fallback upload path for non-GL texture backends with BGRA-to-RGBA conversion.
   - Ensured direct texture view rebinding/readiness so browser textures render reliably on NeoForge and Fabric.
+- Fixed shutdown-time render-thread violations while closing preloaded browsers.
+  - Browser renderer/cursor cleanup is now marshaled to the Minecraft render thread when available.
+  - Prevents `RenderSystem called from wrong thread` errors during MCEF shutdown on Windows/Linux hooks.
 - Fixed handler list concurrency risks in `MCEFClient`.
   - Switched handler collections to `CopyOnWriteArrayList`.
 - Fixed platform architecture detection gaps in `MCEFPlatform`.
