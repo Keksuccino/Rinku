@@ -41,6 +41,10 @@
   - `MCEFBrowser` now dispatches off-thread paint work to the Minecraft render thread.
   - `MCEFRenderer` now asserts render-thread usage in paint upload methods.
   - `MCEFBrowser` now initializes renderer textures immediately when already on the render thread.
+- Fixed NeoForge browser texture rendering and color-channel correctness.
+  - Restored/kept the fast OpenGL upload path for native GL textures (including dirty-rect updates).
+  - Added a compatibility fallback upload path for non-GL texture backends with BGRA-to-RGBA conversion.
+  - Ensured direct texture view rebinding/readiness so browser textures render reliably on NeoForge and Fabric.
 - Fixed handler list concurrency risks in `MCEFClient`.
   - Switched handler collections to `CopyOnWriteArrayList`.
 - Fixed platform architecture detection gaps in `MCEFPlatform`.
