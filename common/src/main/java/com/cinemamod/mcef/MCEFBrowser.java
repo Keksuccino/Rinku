@@ -243,7 +243,13 @@ public class MCEFBrowser extends CefBrowserOsr {
                 return;
             }
 
-            if (renderer.getTextureID() == 0) {
+            if (!renderer.supportsDirtyRectUpload()) {
+                renderer.onPaint(buffer, width, height);
+                if (!showPopupSnapshot) {
+                    popupGraphics = null;
+                    popupSize = null;
+                    popupDrawn = false;
+                }
                 return;
             }
 
@@ -291,7 +297,7 @@ public class MCEFBrowser extends CefBrowserOsr {
                 }
             }
         } else {
-            if (popupRect == null || popupRect.width <= 0 || popupRect.height <= 0 || renderer.getTextureID() == 0) {
+            if (popupRect == null || popupRect.width <= 0 || popupRect.height <= 0 || !renderer.supportsDirtyRectUpload()) {
                 return;
             }
 

@@ -20,16 +20,12 @@
 
 package com.cinemamod.mcef;
 
-import com.mojang.blaze3d.opengl.GlTexture;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.GpuTexture;
-import com.mojang.blaze3d.textures.TextureFormat;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 
 /**
- * A more efficient texture implementation that directly wraps an existing OpenGL texture ID.
- * This bypasses the normal texture creation pipeline and allows us to use an existing texture
- * directly with Minecraft's rendering system.
+ * Texture wrapper that exposes an externally managed GPU texture to Minecraft's texture manager.
  */
 public class MCEFDirectTexture extends AbstractTexture {
 
@@ -40,17 +36,13 @@ public class MCEFDirectTexture extends AbstractTexture {
     }
 
     /**
-     * Directly set the texture to an existing OpenGL texture ID.
-     * This is more efficient than creating a new texture and copying data.
+     * Bind this wrapper to an existing GPU texture managed by MCEFRenderer.
      *
-     * @param textureId The OpenGL texture ID to wrap
+     * @param textureSource The texture to expose to Minecraft's texture manager
      * @param width The width of the texture
      * @param height The height of the texture
      */
-    public void setDirectTextureId(int textureId, int width, int height) {
-        // If we already have a texture and it's not the same ID, don't close it
-        // (we don't own these textures, MCEFRenderer does)
-
+    public void bindTexture(GpuTexture textureSource, int width, int height) {
         if (this.textureView != null) {
             this.textureView.close();
             this.textureView = null;
@@ -58,9 +50,8 @@ public class MCEFDirectTexture extends AbstractTexture {
 
         this.texture = null;
 
-        if (textureId > 0) {
-            // Create a custom GlTexture that wraps the existing ID
-            this.texture = new DirectGlTexture(textureId, width, height);
+        if (textureSource != null && !textureSource.isClosed() && width > 0 && height > 0) {
+            this.texture = textureSource;
             this.textureView = RenderSystem.getDevice().createTextureView(this.texture);
             this.width = width;
             this.height = height;
@@ -79,11 +70,8 @@ public class MCEFDirectTexture extends AbstractTexture {
         return height;
     }
 
-    public int getDirectTextureId() {
-        if (this.texture instanceof GlTexture glTexture && !glTexture.isClosed()) {
-            return glTexture.glId();
-        }
-        return 0;
+    public GpuTexture getBoundTexture() {
+        return this.texture;
     }
 
     public boolean isTextureViewReady() {
@@ -102,41 +90,6 @@ public class MCEFDirectTexture extends AbstractTexture {
         this.texture = null;
         this.width = 0;
         this.height = 0;
-    }
-
-    /**
-     * Custom GlTexture implementation that wraps an existing OpenGL texture ID
-     * without managing its lifecycle.
-     */
-    private static class DirectGlTexture extends GlTexture {
-
-        private final int width;
-        private final int height;
-
-        protected DirectGlTexture(int textureId, int width, int height) {
-            // Provide the wrapped texture's metadata to the GPU texture base
-            super(GpuTexture.USAGE_TEXTURE_BINDING, "MCEF Direct Texture", TextureFormat.RGBA8, width, height, 1, 1, textureId);
-            this.width = width;
-            this.height = height;
-            // Mark as not closed
-            this.closed = false;
-        }
-
-        @Override
-        public void close() {
-            // Texture lifecycle is owned externally; no-op to avoid deleting the GL resource
-        }
-
-        @Override
-        public int getWidth(int mipLevel) {
-            return width >> mipLevel;
-        }
-
-        @Override
-        public int getHeight(int mipLevel) {
-            return height >> mipLevel;
-        }
-
     }
 
 }
