@@ -123,6 +123,10 @@ public class MCEFClient implements CefLoadHandler, CefContextMenuHandler, CefDis
         displayHandlers.add(handler);
     }
 
+    public void removeDisplayHandler(CefDisplayHandler handler) {
+        displayHandlers.remove(handler);
+    }
+
     @Override
     public void onAddressChange(CefBrowser browser, CefFrame frame, String url) {
         for (CefDisplayHandler displayHandler : displayHandlers) displayHandler.onAddressChange(browser, frame, url);

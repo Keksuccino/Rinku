@@ -76,6 +76,10 @@
 - Runtime binary downloads now use GitHub release assets from `Keksuccino/mcef_resources`.
   - Official source moved to `https://github.com/Keksuccino/mcef_resources/releases/download`.
   - Java-CEF assets are resolved from release tags in the format `java-cef-<commit>`.
+- Improved the in-dev example browser screen.
+  - Added URL bar with live address updates and Enter-to-navigate behavior.
+  - Added Back/Forward/Reload navigation buttons.
+  - Added loading indicator over the URL bar while pages are loading.
 - Improved downloader startup flow in `MixinClientPackSource`.
   - Reset download listener state at startup.
   - Improved failure reporting paths.
