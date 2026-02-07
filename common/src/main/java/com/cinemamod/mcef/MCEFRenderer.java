@@ -56,6 +56,7 @@ public class MCEFRenderer {
         directTexture = new MCEFDirectTexture();
         Minecraft.getInstance().getTextureManager().register(textureIdentifier, directTexture);
         textureRegistered = true;
+        syncDirectTextureViewIfNeeded();
     }
 
     public GpuTexture getTexture() {
@@ -74,7 +75,7 @@ public class MCEFRenderer {
      * Check if the texture is ready for rendering with GuiGraphics
      */
     public boolean isTextureReady() {
-        return texture != null && textureRegistered && directTexture != null;
+        return texture != null && textureRegistered && directTexture != null && directTexture.isTextureViewReady();
     }
     
     public int getTextureID() {
@@ -137,13 +138,10 @@ public class MCEFRenderer {
             
             textureWidth = width;
             textureHeight = height;
-            
-            // Update the direct texture wrapper to point to our new texture
-            if (directTexture != null && texture instanceof GlTexture glTexture) {
-                directTexture.setDirectTextureId(glTexture.glId(), width, height);
-            }
         }
-        
+
+        syncDirectTextureViewIfNeeded();
+
         if (texture instanceof GlTexture glTexture) {
             // Bind the texture directly using its GL ID
             GlStateManager._bindTexture(glTexture.glId());
@@ -159,11 +157,26 @@ public class MCEFRenderer {
 
     protected void onPaint(ByteBuffer buffer, int x, int y, int width, int height) {
         RenderSystem.assertOnRenderThread();
+        syncDirectTextureViewIfNeeded();
         if (texture instanceof GlTexture glTexture) {
             // Bind and update sub-region
             GlStateManager._bindTexture(glTexture.glId());
             glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, width, height, GL_BGRA,
                     GL_UNSIGNED_INT_8_8_8_8_REV, buffer);
+        }
+    }
+
+    private void syncDirectTextureViewIfNeeded() {
+        if (!textureRegistered || directTexture == null || !(texture instanceof GlTexture glTexture)) {
+            return;
+        }
+
+        boolean needsRebind = !directTexture.isTextureViewReady()
+                || directTexture.getWidth() != textureWidth
+                || directTexture.getHeight() != textureHeight
+                || directTexture.getDirectTextureId() != glTexture.glId();
+        if (needsRebind) {
+            directTexture.setDirectTextureId(glTexture.glId(), textureWidth, textureHeight);
         }
     }
 }

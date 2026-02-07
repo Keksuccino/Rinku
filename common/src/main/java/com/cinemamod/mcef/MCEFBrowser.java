@@ -110,7 +110,7 @@ public class MCEFBrowser extends CefBrowserOsr {
      * @return The Identifier for this browser's texture, or null if not initialized
      */
     public Identifier getTextureIdentifier() {
-        return renderer != null ? renderer.getTextureIdentifier() : null;
+        return renderer != null && renderer.isTextureReady() ? renderer.getTextureIdentifier() : null;
     }
     
     /**

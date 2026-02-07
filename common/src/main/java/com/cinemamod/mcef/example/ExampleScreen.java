@@ -261,6 +261,9 @@ public class ExampleScreen extends Screen {
 
         // Get the Identifier for the browser texture
         Identifier textureLocation = browser.getTextureIdentifier();
+        if (textureLocation == null) {
+            return;
+        }
 
         int frameRenderWidth = getBrowserWidth();
         int frameRenderHeight = getBrowserHeight();

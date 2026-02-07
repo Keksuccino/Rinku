@@ -79,6 +79,20 @@ public class MCEFDirectTexture extends AbstractTexture {
         return height;
     }
 
+    public int getDirectTextureId() {
+        if (this.texture instanceof GlTexture glTexture && !glTexture.isClosed()) {
+            return glTexture.glId();
+        }
+        return 0;
+    }
+
+    public boolean isTextureViewReady() {
+        return this.texture != null
+                && !this.texture.isClosed()
+                && this.textureView != null
+                && !this.textureView.isClosed();
+    }
+
     @Override
     public void close() {
         if (this.textureView != null) {
@@ -86,6 +100,8 @@ public class MCEFDirectTexture extends AbstractTexture {
             this.textureView = null;
         }
         this.texture = null;
+        this.width = 0;
+        this.height = 0;
     }
 
     /**
