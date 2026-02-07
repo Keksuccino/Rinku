@@ -47,6 +47,9 @@
   - Added support for `x86_64` and `arm64` aliases.
 - Fixed checksum parser compatibility in `MCEFDownloader`.
   - Parser now accepts common `.sha256` text layouts by extracting a valid SHA-256 token from content.
+- Fixed NeoForge dev-environment commit resolution for JCEF downloads.
+  - `MCEF.getJavaCefCommit()` now resolves commit hashes from manifests and local git metadata without invoking git commands.
+  - Missing/invalid commit hashes now fail with a clear downloader configuration error instead of causing a null-replacement crash.
 - Fixed intermittent GLFW cursor GL errors when opening browsers.
   - Mapped unsupported/unavailable CEF cursor shapes to OS default cursor instead of creating invalid GLFW standard cursors.
   - Added safe fallback for invalid/out-of-range cursor IDs.

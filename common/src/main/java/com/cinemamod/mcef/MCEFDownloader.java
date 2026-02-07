@@ -49,6 +49,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 import java.util.HexFormat;
 import java.util.regex.Matcher;
@@ -73,6 +74,7 @@ public class MCEFDownloader {
     private static final int DOWNLOAD_BUFFER_SIZE_BYTES = 16 * 1024;
     private static final int EXTRACT_BUFFER_SIZE_BYTES = 16 * 1024;
     private static final Pattern SHA256_TOKEN_PATTERN = Pattern.compile("(?i)\\b[0-9a-f]{64}\\b");
+    private static final Pattern COMMIT_HASH_PATTERN = Pattern.compile("(?i)^[0-9a-f]{40}$");
 
     public enum MirrorPolicy {
         OFFICIAL_ONLY,
@@ -121,9 +123,9 @@ public class MCEFDownloader {
     }
 
     public MCEFDownloader(String host, String javaCefCommitHash, MCEFPlatform platform, DownloadPolicy downloadPolicy) {
-        this.host = host;
-        this.javaCefCommitHash = javaCefCommitHash;
-        this.platform = platform;
+        this.host = normalizeHost_MCEF(host);
+        this.javaCefCommitHash = normalizeCommitHash_MCEF(javaCefCommitHash);
+        this.platform = Objects.requireNonNull(platform, "MCEF platform must not be null");
         this.downloadPolicy = downloadPolicy == null ? DownloadPolicy.defaults() : downloadPolicy;
     }
 
@@ -150,6 +152,30 @@ public class MCEFDownloader {
                 .replace("{java-cef-tag}", javaCefTag)
                 .replace("{java-cef-commit}", javaCefCommitHash)
                 .replace("{platform}", platform.getNormalizedName());
+    }
+
+    private static String normalizeHost_MCEF(String host) {
+        if (host == null || host.isBlank()) {
+            return OFFICIAL_MIRROR;
+        }
+
+        String normalized = host.trim();
+        while (normalized.endsWith("/")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized;
+    }
+
+    private static String normalizeCommitHash_MCEF(String commitHash) {
+        if (commitHash == null || commitHash.isBlank()) {
+            throw new IllegalArgumentException("java-cef commit hash is missing");
+        }
+
+        String normalized = commitHash.trim().toLowerCase(Locale.ROOT);
+        if (!COMMIT_HASH_PATTERN.matcher(normalized).matches()) {
+            throw new IllegalArgumentException("java-cef commit hash is invalid: " + commitHash);
+        }
+        return normalized;
     }
 
     public void downloadJavaCefBuild() throws IOException {

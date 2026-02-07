@@ -9,12 +9,14 @@ import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
+import java.util.regex.Pattern;
 
 /**
  * An API to create Chromium web browsers in Minecraft.
@@ -31,6 +33,7 @@ public final class MCEF {
 
     private static final ArrayList<MCEFInitListener> awaitingInit = new ArrayList<>();
     private static final String PRELOADED_BROWSER_START_URL = "about:blank";
+    private static final Pattern JAVA_CEF_COMMIT_PATTERN_MCEF = Pattern.compile("(?i)^[0-9a-f]{40}$");
     private static final Object PRELOADED_BROWSER_POOL_LOCK = new Object();
     private static final Deque<MCEFBrowser> PRELOADED_TRANSPARENT_BROWSERS = new ArrayDeque<>();
     private static final Deque<MCEFBrowser> PRELOADED_OPAQUE_BROWSERS = new ArrayDeque<>();
@@ -399,42 +402,138 @@ public final class MCEF {
      * @return The git commit hash of java-cef
      */
     public static String getJavaCefCommit() throws IOException {
-        // First check system property
-        if (System.getProperty("mcef.java.cef.commit") != null) {
-            return System.getProperty("mcef.java.cef.commit");
+        String systemPropertyCommit = normalizeJavaCefCommitHash_MCEF(System.getProperty("mcef.java.cef.commit"));
+        if (systemPropertyCommit != null) {
+            return systemPropertyCommit;
         }
 
-        // Try to get from resources (if loading from a jar)
+        String manifestCommit = resolveJavaCefCommitFromManifest_MCEF();
+        if (manifestCommit != null) {
+            return manifestCommit;
+        }
+
+        String gitMetadataCommit = resolveJavaCefCommitFromGitMetadata_MCEF();
+        if (gitMetadataCommit != null) {
+            return gitMetadataCommit;
+        }
+
+        throw new IOException(
+                "Unable to resolve java-cef commit hash. " +
+                        "Set system property mcef.java.cef.commit or run from a build that includes manifest attribute java-cef-commit."
+        );
+    }
+
+    private static String resolveJavaCefCommitFromManifest_MCEF() throws IOException {
         Enumeration<URL> resources = MCEF.class.getClassLoader().getResources("META-INF/MANIFEST.MF");
-        Map<String, String> commits = new HashMap<>(1);
-        resources.asIterator().forEachRemaining(resource -> {
+        while (resources.hasMoreElements()) {
+            URL resource = resources.nextElement();
             Properties properties = new Properties();
-            try {
-                properties.load(resource.openStream());
-                if (properties.containsKey("java-cef-commit")) {
-                    commits.put(resource.getFile(), properties.getProperty("java-cef-commit"));
-                }
+            try (var inputStream = resource.openStream()) {
+                properties.load(inputStream);
             } catch (IOException e) {
                 LOGGER.warn("Failed to read manifest while resolving java-cef commit from {}", resource, e);
+                continue;
             }
-        });
 
-        if (!commits.isEmpty()) {
-            return commits.get(commits.keySet().stream().toList().get(0));
+            String commit = normalizeJavaCefCommitHash_MCEF(properties.getProperty("java-cef-commit"));
+            if (commit != null) {
+                return commit;
+            }
         }
 
-        // Try to get from the git submodule (if loading from development environment)
-        ProcessBuilder processBuilder = new ProcessBuilder("git", "submodule", "status", "common/java-cef");
-        processBuilder.directory(new File("../../"));
-        Process process = processBuilder.start();
+        return null;
+    }
 
-        BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-        String line;
-        while ((line = reader.readLine()) != null) {
-            String[] parts = line.trim().split(" ");
-            return parts[0].replace("+", "");
+    private static String resolveJavaCefCommitFromGitMetadata_MCEF() {
+        Path currentDir = Path.of(System.getProperty("user.dir", ".")).toAbsolutePath();
+        Path probeDir = currentDir;
+        for (int i = 0; i < 8 && probeDir != null; i++) {
+            Path gitModuleHeadPath = probeDir.resolve(".git/modules/common/java-cef/HEAD");
+            String commit = readGitHeadCommit_MCEF(gitModuleHeadPath);
+            if (commit != null) {
+                LOGGER.info("Resolved java-cef commit from {}", gitModuleHeadPath);
+                return commit;
+            }
+            probeDir = probeDir.getParent();
+        }
+        return null;
+    }
+
+    private static String readGitHeadCommit_MCEF(Path headPath) {
+        if (!Files.isRegularFile(headPath)) {
+            return null;
         }
 
+        String headContent;
+        try {
+            headContent = Files.readString(headPath, StandardCharsets.UTF_8).trim();
+        } catch (IOException e) {
+            LOGGER.warn("Failed to read {}", headPath, e);
+            return null;
+        }
+
+        if (headContent.startsWith("ref:")) {
+            String ref = headContent.substring("ref:".length()).trim();
+            if (ref.isEmpty()) {
+                return null;
+            }
+
+            Path refPath = headPath.getParent().resolve(ref).normalize();
+            if (Files.isRegularFile(refPath)) {
+                try {
+                    return normalizeJavaCefCommitHash_MCEF(Files.readString(refPath, StandardCharsets.UTF_8));
+                } catch (IOException e) {
+                    LOGGER.warn("Failed to read {}", refPath, e);
+                    return null;
+                }
+            }
+
+            Path packedRefsPath = headPath.getParent().resolve("packed-refs");
+            if (Files.isRegularFile(packedRefsPath)) {
+                try {
+                    List<String> lines = Files.readAllLines(packedRefsPath, StandardCharsets.UTF_8);
+                    for (String line : lines) {
+                        String trimmed = line.trim();
+                        if (trimmed.isEmpty() || trimmed.startsWith("#") || trimmed.startsWith("^")) {
+                            continue;
+                        }
+
+                        int delimiter = trimmed.indexOf(' ');
+                        if (delimiter <= 0 || delimiter >= trimmed.length() - 1) {
+                            continue;
+                        }
+
+                        String packedCommit = trimmed.substring(0, delimiter);
+                        String packedRef = trimmed.substring(delimiter + 1);
+                        if (ref.equals(packedRef)) {
+                            return normalizeJavaCefCommitHash_MCEF(packedCommit);
+                        }
+                    }
+                } catch (IOException e) {
+                    LOGGER.warn("Failed to read {}", packedRefsPath, e);
+                }
+            }
+
+            return null;
+        }
+
+        return normalizeJavaCefCommitHash_MCEF(headContent);
+    }
+
+    private static String normalizeJavaCefCommitHash_MCEF(String rawCommit) {
+        if (rawCommit == null) {
+            return null;
+        }
+
+        String normalized = rawCommit.trim();
+        if (normalized.startsWith("+")) {
+            normalized = normalized.substring(1);
+        }
+
+        normalized = normalized.toLowerCase(Locale.ROOT);
+        if (JAVA_CEF_COMMIT_PATTERN_MCEF.matcher(normalized).matches()) {
+            return normalized;
+        }
         return null;
     }
 
