@@ -21,3 +21,5 @@
 /library_cached_sources/
 /minecraft_cached_sources/
 /common/java-cef/
+/buildSrc/build/
+/buildSrc/.gradle/

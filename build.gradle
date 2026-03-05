@@ -325,15 +325,14 @@ subprojects {
                 "fabric_version": fabric_version,
                 "fabric_short_version": fabric_short_version,
                 "fabric_loader_version": fabric_loader_version,
-                "neoforge_version": neoforge_version,
-                "neoforge_loader_version": neoforge_loader_version,
+                "forge_version": forge_version,
+                "forge_loader_version": forge_loader_version,
                 "parchment_version": parchment_version,
                 "parchment_mc_version": parchment_mc_version,
                 "mixin_extras_version": mixin_extras_version,
-                "fabric_loom_version": fabric_loom_version,
-                "neogradle_version": neogradle_version
+                "fabric_loom_version": fabric_loom_version
         ]
-        filesMatching(['pack.mcmeta', 'fabric.mod.json', 'META-INF/mods.toml', 'META-INF/neoforge.mods.toml', '*.mixins.json']) {
+        filesMatching(['pack.mcmeta', 'fabric.mod.json', 'META-INF/mods.toml', 'META-INF/mods.toml', '*.mixins.json']) {
             expand expandProps
         }
         inputs.properties(expandProps)
