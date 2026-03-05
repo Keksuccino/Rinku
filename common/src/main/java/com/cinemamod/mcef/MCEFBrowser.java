@@ -1,30 +1,10 @@
-/*
- *     MCEF (Minecraft Chromium Embedded Framework)
- *     Copyright (C) 2023 CinemaMod Group
- *
- *     This library is free software; you can redistribute it and/or
- *     modify it under the terms of the GNU Lesser General Public
- *     License as published by the Free Software Foundation; either
- *     version 2.1 of the License, or (at your option) any later version.
- *
- *     This library is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- *     Lesser General Public License for more details.
- *
- *     You should have received a copy of the GNU Lesser General Public
- *     License along with this library; if not, write to the Free Software
- *     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301
- *     USA
- */
-
 package com.cinemamod.mcef;
 
 import com.cinemamod.mcef.listeners.MCEFCursorChangeListener;
-import com.mojang.blaze3d.opengl.GlStateManager;
+import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.cef.browser.CefBrowser;
 import org.cef.browser.CefBrowserOsr;
 import org.cef.callback.CefDragData;
@@ -46,7 +26,9 @@ import static org.lwjgl.glfw.GLFW.*;
  * Complete with a renderer, keyboard and mouse inputs, optional
  * browser control shortcuts, cursor handling, drag & drop support.
  */
+@SuppressWarnings("unused")
 public class MCEFBrowser extends CefBrowserOsr {
+
     private static final Logger LOGGER = LoggerFactory.getLogger("MCEF");
 
     /**
@@ -108,13 +90,13 @@ public class MCEFBrowser extends CefBrowserOsr {
     }
     
     /**
-     * Convenience method to get the Identifier for this browser's texture.
+     * Convenience method to get the ResourceLocation for this browser's texture.
      * This can be used directly with GuiGraphics rendering methods.
      * 
-     * @return The Identifier for this browser's texture, or null if not initialized
+     * @return The ResourceLocation for this browser's texture, or null if not initialized
      */
-    public Identifier getTextureIdentifier() {
-        return renderer != null && renderer.isTextureReady() ? renderer.getTextureIdentifier() : null;
+    public ResourceLocation getTextureLocation() {
+        return renderer != null && renderer.isTextureReady() ? renderer.getTextureLocation() : null;
     }
     
     /**
@@ -668,10 +650,10 @@ public class MCEFBrowser extends CefBrowserOsr {
 
     public void setCursor(CefCursorType cursorType) {
         if (cursorType == CefCursorType.NONE) {
-            GLFW.glfwSetInputMode(Minecraft.getInstance().getWindow().handle(), GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+            GLFW.glfwSetInputMode(Minecraft.getInstance().getWindow().getWindow(), GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
         } else {
-            GLFW.glfwSetInputMode(Minecraft.getInstance().getWindow().handle(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-            GLFW.glfwSetCursor(Minecraft.getInstance().getWindow().handle(), MCEF.getGLFWCursorHandle(cursorType));
+            GLFW.glfwSetInputMode(Minecraft.getInstance().getWindow().getWindow(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+            GLFW.glfwSetCursor(Minecraft.getInstance().getWindow().getWindow(), MCEF.getGLFWCursorHandle(cursorType));
         }
     }
 

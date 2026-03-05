@@ -2,17 +2,14 @@ package com.cinemamod.mcef.example;
 
 import com.cinemamod.mcef.MCEF;
 import com.cinemamod.mcef.MCEFBrowser;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.input.CharacterEvent;
-import net.minecraft.client.input.KeyEvent;
-import net.minecraft.client.input.MouseButtonEvent;
-import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
-import net.minecraft.util.Util;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.Util;
 import org.cef.browser.CefBrowser;
 import org.cef.browser.CefFrame;
 import org.cef.handler.CefDisplayHandler;
@@ -153,8 +150,8 @@ public class ExampleScreen extends Screen {
     }
 
     @Override
-    public void resize(int i, int j) {
-        super.resize(i, j);
+    public void resize(@NotNull Minecraft minecraft, int width, int height) {
+        super.resize(minecraft, width, height);
         resizeBrowser();
     }
 
@@ -240,7 +237,7 @@ public class ExampleScreen extends Screen {
     private void renderBrowserTexture(GuiGraphics guiGraphics) {
 
         // Get the Identifier for the browser texture
-        Identifier textureLocation = browser.getTextureIdentifier();
+        ResourceLocation textureLocation = browser.getTextureLocation();
         if (textureLocation == null) {
             return;
         }
@@ -248,7 +245,6 @@ public class ExampleScreen extends Screen {
         int frameRenderWidth = getBrowserWidth();
         int frameRenderHeight = getBrowserHeight();
         guiGraphics.blit(
-                RenderPipelines.GUI_TEXTURED,
                 textureLocation,
                 getBrowserX(),
                 getBrowserY(),
@@ -284,29 +280,29 @@ public class ExampleScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(MouseButtonEvent event, boolean isDoubleClick) {
-        boolean handled = super.mouseClicked(event, isDoubleClick);
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        boolean handled = super.mouseClicked(mouseX, mouseY, button);
         if (handled) {
             return true;
         }
 
-        if (!isInBrowserBounds(event.x(), event.y())) {
+        if (!isInBrowserBounds(mouseX, mouseY)) {
             return false;
         }
 
-        browser.sendMousePress(mouseX(event.x()), mouseY(event.y()), event.button());
+        browser.sendMousePress(mouseX(mouseX), mouseY(mouseY), button);
         browser.setFocus(true);
         return true;
     }
 
     @Override
-    public boolean mouseReleased(MouseButtonEvent event) {
-        boolean handled = super.mouseReleased(event);
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        boolean handled = super.mouseReleased(mouseX, mouseY, button);
         if (handled) {
             return true;
         }
 
-        browser.sendMouseRelease(mouseX(event.x()), mouseY(event.y()), event.button());
+        browser.sendMouseRelease(this.mouseX(mouseX), this.mouseY(mouseY), button);
         browser.setFocus(true);
         return true;
     }
@@ -320,8 +316,8 @@ public class ExampleScreen extends Screen {
     }
 
     @Override
-    public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
-        return super.mouseDragged(event, dragX, dragY);
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
     }
 
     @Override
@@ -340,15 +336,15 @@ public class ExampleScreen extends Screen {
     }
 
     @Override
-    public boolean keyPressed(KeyEvent event) {
-        if (urlBox != null && urlBox.isFocused() && (event.key() == GLFW.GLFW_KEY_ENTER || event.key() == GLFW.GLFW_KEY_KP_ENTER)) {
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (urlBox != null && urlBox.isFocused() && (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER)) {
             navigateFromUrlField();
             setFocused(null);
             browser.setFocus(true);
             return true;
         }
 
-        if (super.keyPressed(event)) {
+        if (super.keyPressed(keyCode, scanCode, modifiers)) {
             return true;
         }
 
@@ -356,14 +352,14 @@ public class ExampleScreen extends Screen {
             return true;
         }
 
-        browser.sendKeyPress(event.key(), event.scancode(), event.modifiers());
+        browser.sendKeyPress(keyCode, scanCode, modifiers);
         browser.setFocus(true);
         return true;
     }
 
     @Override
-    public boolean keyReleased(KeyEvent event) {
-        if (super.keyReleased(event)) {
+    public boolean keyReleased(int keyCode, int scanCode, int modifiers) {
+        if (super.keyReleased(keyCode, scanCode, modifiers)) {
             return true;
         }
 
@@ -371,14 +367,14 @@ public class ExampleScreen extends Screen {
             return true;
         }
 
-        browser.sendKeyRelease(event.key(), event.scancode(), event.modifiers());
+        browser.sendKeyRelease(keyCode, scanCode, modifiers);
         browser.setFocus(true);
         return true;
     }
 
     @Override
-    public boolean charTyped(CharacterEvent event) {
-        if (super.charTyped(event)) {
+    public boolean charTyped(char codePoint, int modifiers) {
+        if (super.charTyped(codePoint, modifiers)) {
             return true;
         }
 
@@ -386,8 +382,8 @@ public class ExampleScreen extends Screen {
             return true;
         }
 
-        if (event.codepoint() == (char) 0) return false;
-        browser.sendKeyTyped((char) event.codepoint(), event.modifiers());
+        if (codePoint == 0) return false;
+        browser.sendKeyTyped(codePoint, modifiers);
         browser.setFocus(true);
         return true;
     }

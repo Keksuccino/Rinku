@@ -1,33 +1,10 @@
-/*
- *     MCEF (Minecraft Chromium Embedded Framework)
- *     Copyright (C) 2023 CinemaMod Group
- *
- *     This library is free software; you can redistribute it and/or
- *     modify it under the terms of the GNU Lesser General Public
- *     License as published by the Free Software Foundation; either
- *     version 2.1 of the License, or (at your option) any later version.
- *
- *     This library is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- *     Lesser General Public License for more details.
- *
- *     You should have received a copy of the GNU Lesser General Public
- *     License along with this library; if not, write to the Free Software
- *     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301
- *     USA
- */
-
 package com.cinemamod.mcef;
 
-import com.mojang.blaze3d.opengl.GlStateManager;
-import com.mojang.blaze3d.opengl.GlTexture;
+import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.GpuTexture;
-import com.mojang.blaze3d.textures.TextureFormat;
 import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.Minecraft;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import java.nio.ByteBuffer;
 import java.util.UUID;
 import static org.lwjgl.opengl.GL12.*;
@@ -38,23 +15,23 @@ public class MCEFRenderer {
     private int textureWidth = 0;
     private int textureHeight = 0;
     
-    // Identifier for this renderer's texture
-    private final Identifier textureIdentifier;
+    // ResourceLocation for this renderer's texture
+    private final ResourceLocation textureResourceLocation;
     private MCEFDirectTexture directTexture;
     private boolean textureRegistered = false;
     private ByteBuffer fallbackRgbaUploadBuffer_MCEF;
 
     protected MCEFRenderer(boolean transparent) {
         this.transparent = transparent;
-        // Generate a unique Identifier for this renderer
+        // Generate a unique ResourceLocation for this renderer
         String uniqueId = UUID.randomUUID().toString().toLowerCase().replace("-", "");
-        this.textureIdentifier = Identifier.fromNamespaceAndPath("mcef", "browser_" + uniqueId);
+        this.textureResourceLocation = ResourceLocation.fromNamespaceAndPath("mcef", "browser_" + uniqueId);
     }
 
     public void initialize() {
         // Create and register the direct texture wrapper with Minecraft's TextureManager
         directTexture = new MCEFDirectTexture();
-        Minecraft.getInstance().getTextureManager().register(textureIdentifier, directTexture);
+        Minecraft.getInstance().getTextureManager().register(textureResourceLocation, directTexture);
         textureRegistered = true;
         syncDirectTextureViewIfNeeded();
     }
@@ -64,11 +41,11 @@ public class MCEFRenderer {
     }
     
     /**
-     * Gets the Identifier that can be used with GuiGraphics and other Minecraft rendering methods.
-     * This Identifier is registered with the TextureManager and points to the browser's texture.
+     * Gets the ResourceLocation that can be used with GuiGraphics and other Minecraft rendering methods.
+     * This ResourceLocation is registered with the TextureManager and points to the browser's texture.
      */
-    public Identifier getTextureIdentifier() {
-        return textureIdentifier;
+    public ResourceLocation getTextureLocation() {
+        return textureResourceLocation;
     }
     
     /**
@@ -118,8 +95,8 @@ public class MCEFRenderer {
         fallbackRgbaUploadBuffer_MCEF = null;
         
         // Unregister from TextureManager
-        if (textureRegistered && textureIdentifier != null) {
-            Minecraft.getInstance().getTextureManager().release(textureIdentifier);
+        if (textureRegistered && textureResourceLocation != null) {
+            Minecraft.getInstance().getTextureManager().release(textureResourceLocation);
             textureRegistered = false;
         }
     }
@@ -143,11 +120,6 @@ public class MCEFRenderer {
                 1, // depthOrLayers
                 1  // mipLevels
             );
-
-            // Configure texture parameters
-            //TODO EXPERIMENTAL
-//            texture.setTextureFilter(FilterMode.LINEAR, FilterMode.LINEAR, false);
-//            texture.setAddressMode(AddressMode.CLAMP_TO_EDGE);
             
             textureWidth = width;
             textureHeight = height;
@@ -163,8 +135,7 @@ public class MCEFRenderer {
             GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, 0);
             
             // Upload the full texture
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
-                    GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, buffer);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, buffer);
             return;
         }
 
@@ -177,8 +148,7 @@ public class MCEFRenderer {
         if (texture instanceof GlTexture glTexture) {
             // Bind and update sub-region
             GlStateManager._bindTexture(glTexture.glId());
-            glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, width, height, GL_BGRA,
-                    GL_UNSIGNED_INT_8_8_8_8_REV, buffer);
+            glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, width, height, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, buffer);
             return;
         }
 
@@ -200,13 +170,7 @@ public class MCEFRenderer {
         }
     }
 
-    private void uploadWithCommandEncoder_MCEF(
-            ByteBuffer buffer,
-            int destinationX,
-            int destinationY,
-            int copyWidth,
-            int copyHeight
-    ) {
+    private void uploadWithCommandEncoder_MCEF(ByteBuffer buffer, int destinationX, int destinationY, int copyWidth, int copyHeight) {
         if (texture == null || buffer == null) {
             return;
         }
@@ -267,4 +231,5 @@ public class MCEFRenderer {
         dst.position(0);
         return dst;
     }
+
 }
