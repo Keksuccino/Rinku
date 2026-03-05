@@ -43,6 +43,18 @@ pluginManagement {
         exclusiveContent {
             forRepository {
                 maven {
+                    name = 'ParchmentMC'
+                    url = 'https://maven.parchmentmc.org'
+                }
+            }
+            filter {
+                includeGroupByRegex 'org\\.parchmentmc(\\..*)?'
+            }
+        }
+
+        exclusiveContent {
+            forRepository {
+                maven {
                     name = 'Sponge Snapshots'
                     url = 'https://repo.spongepowered.org/repository/maven-public/'
                 }

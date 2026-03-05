@@ -2,8 +2,8 @@
 plugins {
     id 'idea'
     id 'maven-publish'
-    id 'net.minecraftforge.gradle' version '[7.0.3,8)'
-    id 'net.minecraftforge.jarjar' version '0.2.3'
+    id 'net.minecraftforge.gradle' version '[6.0.24,6.2)'
+    id 'org.parchmentmc.librarian.forgegradle' version '1.+'
     id 'org.spongepowered.mixin' version '0.7-SNAPSHOT'
     id 'java-library'
 }
@@ -12,35 +12,49 @@ base {
     archivesName = "${mod_id}"
 }
 
-// MixinGradle 0.7.x expects a legacy `project.reobf` container from older ForgeGradle APIs.
-// FG7 no longer exposes it the same way, so provide an empty compatibility container.
-if (!project.ext.has('reobf')) {
-    project.ext.reobf = []
-}
-
 mixin {
     add(sourceSets.main, "${mod_id}.refmap.json")
     config("${mod_id}.mixins.json")
     config("${mod_id}.forge.mixins.json")
 }
 
-// Automatically enable neoforge AccessTransformers if the file exists
-// This location is hardcoded in FML and can not be changed.
-// https://github.com/neoforged/FancyModLoader/blob/a952595eaaddd571fbc53f43847680b00894e0c1/loader/src/main/java/net/neoforged/fml/loading/moddiscovery/ModFile.java#L118
-if (file('src/main/resources/META-INF/accesstransformer.cfg').exists()) {
-    minecraft.setAccessTransformer('META-INF/accesstransformer.cfg')
+jarJar.enable()
+
+def forgeMappingsChannel = providers.gradleProperty("forge_mappings_channel")
+        .map { it.trim().toLowerCase(java.util.Locale.ROOT) }
+        .orElse("parchment")
+        .get()
+def supportedForgeMappings = ['official', 'stable', 'snapshot', 'stable_nodoc', 'snapshot_nodoc', 'parchment']
+if (!(forgeMappingsChannel in supportedForgeMappings)) {
+    throw new GradleException("Unsupported ForgeGradle 6 mapping channel '${forgeMappingsChannel}'. Supported channels: ${supportedForgeMappings}.")
 }
+def defaultParchmentMappingsVersion = parchment_mc_version == minecraft_version
+        ? "${parchment_version}-${minecraft_version}"
+        : "${parchment_mc_version}-${parchment_version}-${minecraft_version}"
+def forgeMappingsVersion = providers.gradleProperty("forge_mappings_version")
+        .orElse(forgeMappingsChannel == "parchment" ? defaultParchmentMappingsVersion : "${minecraft_version}")
+        .get()
 
 minecraft {
 
-    mappings channel: 'official', version: '${minecraft_version}'
-    dependency "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+    mappings channel: forgeMappingsChannel, version: forgeMappingsVersion
+
+    // Required so ProcessResources runs before IDE launches.
+    copyIdeResources = true
+
+    // Automatically enable Forge AccessTransformers if the file exists.
+    // This location is hardcoded in Forge and can not be changed.
+    if (file('src/main/resources/META-INF/accesstransformer.cfg').exists()) {
+        accessTransformer = file('src/main/resources/META-INF/accesstransformer.cfg')
+    }
 
     runs {
         client {
-            workingDir = project.file('../run_client')
-            systemProperty 'mixin.env.remapRefMap', 'true'
-            systemProperty 'mixin.env.refMapRemappingFile', "${projectDir}/build/createSrgToMcp/output.srg"
+            workingDirectory project.file('../run_client')
+            ideaModule "${rootProject.name}.${project.name}.main"
+            taskName 'Client'
+            property 'mixin.env.remapRefMap', 'true'
+            property 'mixin.env.refMapRemappingFile', "${projectDir}/build/createSrgToMcp/output.srg"
             mods {
                 modClientRun {
                     source sourceSets.main
@@ -48,9 +62,11 @@ minecraft {
             }
         }
         server {
-            workingDir = project.file('../run_server')
-            systemProperty 'mixin.env.remapRefMap', 'true'
-            systemProperty 'mixin.env.refMapRemappingFile', "${projectDir}/build/createSrgToMcp/output.srg"
+            workingDirectory project.file('../run_server')
+            ideaModule "${rootProject.name}.${project.name}.main"
+            taskName 'Server'
+            property 'mixin.env.remapRefMap', 'true'
+            property 'mixin.env.refMapRemappingFile', "${projectDir}/build/createSrgToMcp/output.srg"
             mods {
                 modServerRun {
                     source sourceSets.main
@@ -61,60 +77,41 @@ minecraft {
 
 }
 
-//Temporarily disabled tests so compiling doesn't fail until I figure out why tf neoforge:test fails
+// Temporarily disabled tests to avoid launcher-specific test task issues during normal development builds.
 test {
     exclude '**/*'
 }
 
-sourceSets.main.resources { srcDir 'src/generated/resources' }
-
-jarJar.register()
+sourceSets.main.resources.srcDir 'src/generated/resources'
 
 dependencies {
+    minecraft("net.minecraftforge:forge:${minecraft_version}-${forge_version}")
     implementation('net.sf.jopt-simple:jopt-simple:5.0.4') { version { strictly '5.0.4' } }
     annotationProcessor("org.spongepowered:mixin:0.8.5-SNAPSHOT:processor")
-    //Needs to be "implementation" when building and "compileOnly" in-dev for some frickin reason
+    // Needs to be "implementation" when building and "compileOnly" in-dev.
     implementation(annotationProcessor("io.github.llamalad7:mixinextras-common:${mixin_extras_version}"))
-    //compileOnly(annotationProcessor("io.github.llamalad7:mixinextras-common:${mixin_extras_version}"))
-    def mixinExtrasForge = jarJar("io.github.llamalad7:mixinextras-forge:${mixin_extras_version}")
-    jarJar.configure(mixinExtrasForge) {
-        setRange("[${mixin_extras_version},)")
+    implementation(jarJar("io.github.llamalad7:mixinextras-forge:${mixin_extras_version}")) {
+        jarJar.ranged(it, "[${mixin_extras_version},)")
     }
-    implementation(mixinExtrasForge)
     compileOnly project(":common")
 }
 
-// Exclude Fabric Loader from NeoForge
+// Exclude Fabric Loader from Forge
 configurations {
-    runtimeClasspath    { exclude group: 'net.fabricmc', module: 'fabric-loader' }
+    runtimeClasspath { exclude group: 'net.fabricmc', module: 'fabric-loader' }
     developmentRuntimeClasspath {
         // Gradle 8 names used by ForgeGradle 6
         exclude group: 'net.fabricmc', module: 'fabric-loader'
     }
 }
 
-// Exclude Fabric Loader from NeoForge
-configurations {
-    runtimeClasspath    { exclude group: 'net.fabricmc', module: 'fabric-loader' }
-    developmentRuntimeClasspath {
-        // Gradle 8 names used by ForgeGradle 6
-        exclude group: 'net.fabricmc', module: 'fabric-loader'
-    }
-}
-
-// NeoGradle compiles the game, but we don't want to add our common code to the game's code++
-Spec<Task> notNeoTask = { Task it -> !it.name.startsWith("neo") } as Spec<Task>
-
-tasks.named("compileJava", JavaCompile).configure {
+tasks.withType(JavaCompile).configureEach {
     source(project(":common").sourceSets.main.allSource)
     source(project(":common").sourceSets.jcef.allSource)
-}
-
-tasks.withType(JavaCompile).matching(notNeoTask).configureEach {
     it.options.compilerArgs += ['-Xlint:-deprecation', '-Xlint:-removal']
 }
 
-tasks.withType(Javadoc).matching(notNeoTask).configureEach {
+tasks.withType(Javadoc).configureEach {
     source(project(":common").sourceSets.main.allJava)
 }
 
@@ -123,22 +120,22 @@ tasks.named("sourcesJar", Jar) {
     from(project(":common").sourceSets.jcef.allSource)
 }
 
-tasks.withType(ProcessResources).matching(notNeoTask).configureEach {
-    from project(":common").sourceSets.main.resources
+processResources {
+    dependsOn(tasks.named("compileJava"))
+    from(project(":common").sourceSets.main.resources) {
+        exclude "${mod_id}.refmap.json"
+    }
 }
+
+jar.finalizedBy('reobfJar')
 
 publishing {
     publications {
         mavenJava(MavenPublication) {
-            artifactId "${mod_id}-neoforge"
+            artifactId "${mod_id}-forge"
             version "${mod_version}-${minecraft_version}"
             from components.java
-            pom.withXml {
-                def deps = asNode().get('dependencies')
-                if (deps instanceof List) {
-                    deps.each { asNode().remove(it) }
-                }
-            }
+            fg.component(it)
         }
     }
     repositories {
@@ -146,98 +143,6 @@ publishing {
             url "file://" + System.getenv("local_maven")
         }
     }
-}
-
-tasks.named("build") {
-    dependsOn("generatePomFileForMavenJavaPublication", "generateMetadataFileForMavenJavaPublication")
-}
-
-tasks.withType(GenerateModuleMetadata).configureEach {
-    enabled = true
-}
-
-def stripModuleDepsTask = tasks.register("stripModuleDependencies") {
-    def moduleFile = layout.buildDirectory.file("publications/mavenJava/module.json")
-    inputs.file(moduleFile)
-    outputs.file(moduleFile)
-    doLast {
-        def file = moduleFile.get().asFile
-        if (!file.exists()) {
-            return
-        }
-        def json = new groovy.json.JsonSlurper().parse(file)
-        if (json?.variants) {
-            json.variants = json.variants.findAll { variant ->
-                !(variant instanceof Map) || variant.name != "accessTransformerElements"
-            }
-            def runtimeAllFiles = null
-            def runtimeRenamedFiles = null
-            json.variants.each { variant ->
-                if (variant instanceof Map) {
-                    if (variant.name == "runtimeElements" && variant.files instanceof List) {
-                        def allFiles = variant.files.findAll { fileEntry ->
-                            fileEntry instanceof Map &&
-                                    fileEntry.name instanceof String &&
-                                    fileEntry.name.endsWith("-all.jar")
-                        }
-                        if (allFiles != null && !allFiles.isEmpty()) {
-                            runtimeAllFiles = allFiles
-                            runtimeRenamedFiles = allFiles.collect { fileEntry ->
-                                if (fileEntry instanceof Map) {
-                                    def renamed = new LinkedHashMap(fileEntry)
-                                    if (renamed.name instanceof String && renamed.name.endsWith("-all.jar")) {
-                                        renamed.name = renamed.name.replace("-all.jar", ".jar")
-                                    }
-                                    if (renamed.url instanceof String && renamed.url.endsWith("-all.jar")) {
-                                        renamed.url = renamed.url.replace("-all.jar", ".jar")
-                                    }
-                                    renamed
-                                } else {
-                                    fileEntry
-                                }
-                            }
-                            variant.files = runtimeRenamedFiles
-                        }
-                    }
-                    variant.remove("dependencies")
-                }
-            }
-            json.variants.each { variant ->
-                if (variant instanceof Map && variant.name == "apiElements") {
-                    if (runtimeRenamedFiles != null) {
-                        variant.files = runtimeRenamedFiles.collect { fileEntry ->
-                            fileEntry instanceof Map ? new LinkedHashMap(fileEntry) : fileEntry
-                        }
-                    } else if (variant.files instanceof List) {
-                        variant.files = variant.files.findAll { fileEntry ->
-                            fileEntry instanceof Map &&
-                                    fileEntry.name instanceof String &&
-                                    fileEntry.name.endsWith("-all.jar")
-                        }
-                        variant.files = variant.files.collect { fileEntry ->
-                            if (fileEntry instanceof Map) {
-                                def renamed = new LinkedHashMap(fileEntry)
-                                if (renamed.name instanceof String && renamed.name.endsWith("-all.jar")) {
-                                    renamed.name = renamed.name.replace("-all.jar", ".jar")
-                                }
-                                if (renamed.url instanceof String && renamed.url.endsWith("-all.jar")) {
-                                    renamed.url = renamed.url.replace("-all.jar", ".jar")
-                                }
-                                renamed
-                            } else {
-                                fileEntry
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        file.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(json))
-    }
-}
-
-tasks.named("generateMetadataFileForMavenJavaPublication") {
-    finalizedBy(stripModuleDepsTask)
 }
 
 jar {
