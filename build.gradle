@@ -4,37 +4,140 @@ plugins {
     id "org.jetbrains.gradle.plugin.idea-ext" version "1.3"
 }
 
-tasks.register('cloneJcef', Exec) {
-    dependsOn 'syncJcef'
-    commandLine 'git', 'submodule', 'update', '--init', '--recursive', 'common/java-cef'
+def getJcefRepoUrl(Project project) {
+    def defaultUrl = "https://github.com/CinemaMod/java-cef.git"
+    def modulesFile = project.file('.gitmodules')
+    if (!modulesFile.exists()) {
+        return defaultUrl
+    }
+
+    def inJcefSection = false
+    for (String rawLine : modulesFile.readLines()) {
+        def line = rawLine.trim()
+        if (line.startsWith('[submodule ')) {
+            inJcefSection = line == '[submodule "common/java-cef"]'
+            continue
+        }
+        if (inJcefSection && line.startsWith('url =')) {
+            return line.substring('url ='.length()).trim()
+        }
+    }
+    return defaultUrl
 }
 
-tasks.register('syncJcef', Exec) {
-    commandLine 'git', 'submodule', 'sync', '--', 'common/java-cef'
+def runGit(Project project, List<String> args, boolean failOnError = true) {
+    def command = ['git'] + args
+    def process = new ProcessBuilder(command)
+            .directory(project.rootDir)
+            .redirectErrorStream(true)
+            .start()
+    def output = process.inputStream.getText('UTF-8')
+    def exitValue = process.waitFor()
+    if (failOnError && exitValue != 0) {
+        throw new GradleException("Git command failed (${command.join(' ')}):\n${output}".trim())
+    }
+    return [exitValue: exitValue, output: output]
+}
+
+def isTrackedSubmodule(Project project, String submodulePath) {
+    def result = runGit(project, ['ls-files', '--stage', '--', submodulePath], false)
+    if (result.exitValue != 0) {
+        return false
+    }
+    return result.output.readLines().any { it.startsWith('160000 ') }
+}
+
+tasks.register('syncJcef') {
+    doLast {
+        def jcefPath = 'common/java-cef'
+        def jcefDir = rootProject.file(jcefPath)
+        def repoUrl = getJcefRepoUrl(rootProject)
+        def jcefGitMetadata = new File(jcefDir, '.git')
+        def trackedAsSubmodule = isTrackedSubmodule(rootProject, jcefPath)
+
+        if (trackedAsSubmodule) {
+            runGit(rootProject, ['submodule', 'sync', '--', jcefPath])
+            return
+        }
+
+        if (jcefGitMetadata.exists()) {
+            runGit(rootProject, ['-C', jcefDir.absolutePath, 'remote', 'set-url', 'origin', repoUrl])
+            return
+        }
+    }
+}
+
+tasks.register('cloneJcef') {
+    dependsOn 'syncJcef'
+    doLast {
+        def jcefPath = 'common/java-cef'
+        def jcefDir = rootProject.file(jcefPath)
+        def repoUrl = getJcefRepoUrl(rootProject)
+        def jcefGitMetadata = new File(jcefDir, '.git')
+        def trackedAsSubmodule = isTrackedSubmodule(rootProject, jcefPath)
+
+        if (jcefGitMetadata.exists()) {
+            return
+        }
+
+        if (trackedAsSubmodule) {
+            runGit(rootProject, ['submodule', 'update', '--init', '--recursive', jcefPath])
+            return
+        }
+
+        if (jcefDir.exists()) {
+            def contents = jcefDir.listFiles()
+            if (contents != null && contents.length > 0) {
+                throw new GradleException("Cannot clone java-cef into ${jcefDir}: directory exists and is not empty.")
+            }
+        }
+
+        logger.lifecycle("java-cef is not tracked as a submodule in this checkout; cloning directly from ${repoUrl}.")
+        runGit(rootProject, ['clone', '--recursive', repoUrl, jcefDir.absolutePath])
+    }
 }
 
 // https://gist.github.com/JonasGroeger/7620911
 def getCheckedOutGitCommitHash(Project mcefParent) {
-    def gitFolder = "$mcefParent.projectDir/.git/modules/common/java-cef/"
     def takeFromHash = 40
-    /*
-     * '.git/HEAD' contains either
-     *      in case of detached head: the currently checked out commit hash
-     *      otherwise: a reference to a file containing the current commit hash
-     */
-    def gitHeadFile = new File(gitFolder + "HEAD")
-    if (gitHeadFile.exists()) {
-        def head = gitHeadFile.text.split(":") // .git/HEAD
-        def isCommit = head.length == 1 // e5a7c79edabbf7dd39888442df081b1c9d8e88fd
-        // def isRef = head.length > 1     // ref: refs/heads/master
+    def headCandidates = []
+    def submoduleHead = new File(mcefParent.projectDir, ".git/modules/common/java-cef/HEAD")
+    headCandidates.add(submoduleHead)
 
-        if (isCommit) return head[0].trim().take(takeFromHash) // e5a7c79edabb
-
-        def refHead = new File(gitFolder + head[1].trim()) // .git/refs/heads/master
-        refHead.text.trim().take takeFromHash
-    } else {
-        return ""
+    def jcefGitPath = new File(mcefParent.projectDir, "common/java-cef/.git")
+    if (jcefGitPath.isDirectory()) {
+        headCandidates.add(new File(jcefGitPath, "HEAD"))
+    } else if (jcefGitPath.isFile()) {
+        def pointer = jcefGitPath.text.trim()
+        if (pointer.startsWith("gitdir:")) {
+            def gitDirLocation = pointer.substring("gitdir:".length()).trim()
+            headCandidates.add(new File(jcefGitPath.parentFile, "${gitDirLocation}/HEAD"))
+        }
     }
+
+    for (File gitHeadFile : headCandidates) {
+        if (!gitHeadFile.exists()) {
+            continue
+        }
+
+        /*
+         * '.git/HEAD' contains either
+         *      in case of detached head: the currently checked out commit hash
+         *      otherwise: a reference to a file containing the current commit hash
+         */
+        def head = gitHeadFile.text.split(":")
+        def isCommit = head.length == 1
+        if (isCommit) {
+            return head[0].trim().take(takeFromHash)
+        }
+
+        def refHead = new File(gitHeadFile.parentFile, head[1].trim())
+        if (refHead.exists()) {
+            return refHead.text.trim().take(takeFromHash)
+        }
+    }
+
+    return ""
 }
 
 subprojects {
