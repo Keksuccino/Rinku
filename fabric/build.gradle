@@ -57,10 +57,6 @@ tasks.withType(JavaCompile).configureEach {
 tasks.withType(Javadoc).configureEach {
     source(project(":common").sourceSets.main.allJava)
 }
-tasks.withType(Test).configureEach {
-    // Allow builds when there are test sources but no matching tests.
-    failOnNoDiscoveredTests = false
-}
 tasks.named("sourcesJar", Jar) {
     from(project(":common").sourceSets.main.allSource)
     from(project(":common").sourceSets.jcef.allSource)
