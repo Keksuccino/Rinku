@@ -9,7 +9,7 @@ import net.minecraft.network.chat.Component;
 
 public class MCEFExampleMod {
 
-    public static final KeyMapping KEY_MAPPING = new KeyMapping("Open Browser", InputConstants.KEY_F12, KeyMapping.Category.MISC);
+    public static final KeyMapping KEY_MAPPING = new KeyMapping("Open Browser", InputConstants.KEY_F12, KeyMapping.CATEGORY_MISC);
 
     public MCEFExampleMod() {
         ClientTickEvents.START_CLIENT_TICK.register((client) -> onTick());

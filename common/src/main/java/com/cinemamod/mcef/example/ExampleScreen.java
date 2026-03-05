@@ -214,6 +214,22 @@ public class ExampleScreen extends Screen {
         browser.setFocus(true);
     }
 
+    private void clearNavigationFocus_MCEF() {
+        setFocused(null);
+        if (backButton != null) {
+            backButton.setFocused(false);
+        }
+        if (forwardButton != null) {
+            forwardButton.setFocused(false);
+        }
+        if (reloadButton != null) {
+            reloadButton.setFocused(false);
+        }
+        if (urlBox != null) {
+            urlBox.setFocused(false);
+        }
+    }
+
     private String normalizeUrl(String input) {
         if (input.matches("^[a-zA-Z][a-zA-Z0-9+.-]*:.*")) {
             return input;
@@ -290,6 +306,7 @@ public class ExampleScreen extends Screen {
             return false;
         }
 
+        clearNavigationFocus_MCEF();
         browser.sendMousePress(mouseX(mouseX), mouseY(mouseY), button);
         browser.setFocus(true);
         return true;

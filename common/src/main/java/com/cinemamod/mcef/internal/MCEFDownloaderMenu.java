@@ -25,7 +25,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import org.joml.Matrix3x2fStack;
+import com.mojang.blaze3d.vertex.PoseStack;
 
 public class MCEFDownloaderMenu extends Screen {
     private final Screen menu;
@@ -43,12 +43,14 @@ public class MCEFDownloaderMenu extends Screen {
         double progressBarHeight = 14;
         double progressBarWidth = width / 3d;
 
-        Matrix3x2fStack matrix = graphics.pose();
+        this.renderBackground(graphics, mouseX, mouseY, partialTick);
+
+        PoseStack matrix = graphics.pose();
 
         /* Draw Progress Bar */
-        matrix.pushMatrix();
-        matrix.translate((float) cx, (float) cy);
-        matrix.translate((float) (-progressBarWidth / 2d), (float) (-progressBarHeight / 2d));
+        matrix.pushPose();
+        matrix.translate((float) cx, (float) cy, 0.0F);
+        matrix.translate((float) (-progressBarWidth / 2d), (float) (-progressBarHeight / 2d), 0.0F);
         graphics.fill( // bar border
                 0, 0,
                 (int) progressBarWidth,
@@ -67,7 +69,7 @@ public class MCEFDownloaderMenu extends Screen {
                 (int) progressBarHeight - 4,
                 -1
         );
-        matrix.popMatrix();
+        matrix.popPose();
 
         // putting this here incase I want to re-add a third line later on
         // allows me to generalize the code to not care about line count
@@ -80,21 +82,21 @@ public class MCEFDownloaderMenu extends Screen {
 
         // calculate offset for the top line
         int oSet = ((font.lineHeight / 2) + ((font.lineHeight + 2) * (text.length + 2))) + 4;
-        matrix.pushMatrix();
-        matrix.translate((float) cx, (float) (cy - oSet));
+        matrix.pushPose();
+        matrix.translate((float) cx, (float) (cy - oSet), 0.0F);
         // draw menu name
         graphics.drawString(this.font, this.title, (int) -(font.width(this.title) / 2d), 0, -1);
         // draw other text
         int index = 0;
         for (String s : text) {
             if (index == 1) {
-                matrix.translate(0.0F, font.lineHeight + 2.0F);
+                matrix.translate(0.0F, font.lineHeight + 2.0F, 0.0F);
             }
-            matrix.translate(0.0F, font.lineHeight + 2.0F);
+            matrix.translate(0.0F, font.lineHeight + 2.0F, 0.0F);
             graphics.drawString(this.font, s, (int) -(font.width(s) / 2d), 0, -1);
             index++;
         }
-        matrix.popMatrix();
+        matrix.popPose();
 
     }
 

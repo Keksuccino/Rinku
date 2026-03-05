@@ -1,25 +1,26 @@
 package com.cinemamod.mcef;
 
 import com.mojang.blaze3d.platform.GlStateManager;
+import com.mojang.blaze3d.platform.TextureUtil;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.packs.resources.ResourceManager;
 import java.nio.ByteBuffer;
 import java.util.UUID;
 import static org.lwjgl.opengl.GL12.*;
 
 public class MCEFRenderer {
     private final boolean transparent;
-    private GpuTexture texture;
+    private ManagedTexture texture;
     private int textureWidth = 0;
     private int textureHeight = 0;
+    private boolean textureUploaded = false;
     
     // ResourceLocation for this renderer's texture
     private final ResourceLocation textureResourceLocation;
-    private MCEFDirectTexture directTexture;
     private boolean textureRegistered = false;
-    private ByteBuffer fallbackRgbaUploadBuffer_MCEF;
 
     protected MCEFRenderer(boolean transparent) {
         this.transparent = transparent;
@@ -29,14 +30,12 @@ public class MCEFRenderer {
     }
 
     public void initialize() {
-        // Create and register the direct texture wrapper with Minecraft's TextureManager
-        directTexture = new MCEFDirectTexture();
-        Minecraft.getInstance().getTextureManager().register(textureResourceLocation, directTexture);
+        texture = new ManagedTexture();
+        Minecraft.getInstance().getTextureManager().register(textureResourceLocation, texture);
         textureRegistered = true;
-        syncDirectTextureViewIfNeeded();
     }
 
-    public GpuTexture getTexture() {
+    public AbstractTexture getTexture() {
         return texture;
     }
     
@@ -52,27 +51,19 @@ public class MCEFRenderer {
      * Check if the texture is ready for rendering with GuiGraphics
      */
     public boolean isTextureReady() {
-        if (texture == null || !textureRegistered || directTexture == null) {
-            return false;
-        }
-
-        if (RenderSystem.isOnRenderThread()) {
-            syncDirectTextureViewIfNeeded();
-        }
-
-        return directTexture.isTextureViewReady();
+        return textureRegistered && textureUploaded && textureWidth > 0 && textureHeight > 0;
     }
     
     public int getTextureID() {
-        // For compatibility, return the OpenGL ID if texture exists
-        if (texture instanceof GlTexture) {
-            return ((GlTexture) texture).glId();
+        if (texture == null || !textureUploaded || !RenderSystem.isOnRenderThreadOrInit()) {
+            return 0;
         }
-        return 0;
+
+        return texture.getId();
     }
 
     public boolean supportsDirtyRectUpload() {
-        return texture instanceof GlTexture && getTextureID() != 0;
+        return texture != null && textureUploaded && textureWidth > 0 && textureHeight > 0;
     }
     
     public int getTextureWidth() {
@@ -88,148 +79,67 @@ public class MCEFRenderer {
     }
 
     protected void cleanup() {
-        if (texture != null) {
-            texture.close();
-            texture = null;
-        }
-        fallbackRgbaUploadBuffer_MCEF = null;
+        textureUploaded = false;
+        textureWidth = 0;
+        textureHeight = 0;
         
         // Unregister from TextureManager
-        if (textureRegistered && textureResourceLocation != null) {
+        if (textureRegistered) {
             Minecraft.getInstance().getTextureManager().release(textureResourceLocation);
             textureRegistered = false;
         }
+
+        texture = null;
     }
 
     protected void onPaint(ByteBuffer buffer, int width, int height) {
         RenderSystem.assertOnRenderThread();
-        // Create or recreate texture if size changed
-        if (texture == null || textureWidth != width || textureHeight != height) {
-            if (texture != null) {
-                texture.close();
-            }
-            
-            // Create new GpuTexture using the device
-            String label = "MCEF Browser Texture " + width + "x" + height;
-            texture = RenderSystem.getDevice().createTexture(
-                label,
-                GpuTexture.USAGE_TEXTURE_BINDING | GpuTexture.USAGE_COPY_DST,
-                TextureFormat.RGBA8,
-                width,
-                height,
-                1, // depthOrLayers
-                1  // mipLevels
-            );
-            
-            textureWidth = width;
-            textureHeight = height;
-        }
 
-        syncDirectTextureViewIfNeeded();
-
-        if (texture instanceof GlTexture glTexture) {
-            // Bind the texture directly using its GL ID
-            GlStateManager._bindTexture(glTexture.glId());
-            GlStateManager._pixelStore(GL_UNPACK_ROW_LENGTH, width);
-            GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, 0);
-            GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, 0);
-            
-            // Upload the full texture
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, buffer);
+        if (buffer == null || width <= 0 || height <= 0 || texture == null) {
             return;
         }
 
-        uploadWithCommandEncoder_MCEF(buffer, 0, 0, width, height);
+        ensureTextureStorage_MCEF(width, height);
+
+        int textureId = texture.getId();
+        GlStateManager._bindTexture(textureId);
+        GlStateManager._pixelStore(GL_UNPACK_ROW_LENGTH, width);
+        GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, 0);
+        GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, 0);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, buffer);
+        textureUploaded = true;
     }
 
     protected void onPaint(ByteBuffer buffer, int x, int y, int width, int height) {
         RenderSystem.assertOnRenderThread();
-        syncDirectTextureViewIfNeeded();
-        if (texture instanceof GlTexture glTexture) {
-            // Bind and update sub-region
-            GlStateManager._bindTexture(glTexture.glId());
-            glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, width, height, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, buffer);
+        if (buffer == null || width <= 0 || height <= 0 || texture == null || !textureUploaded) {
             return;
         }
 
-        // Fallback upload path assumes a tightly packed source rectangle.
-        uploadWithCommandEncoder_MCEF(buffer, x, y, width, height);
+        GlStateManager._bindTexture(texture.getId());
+        glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, width, height, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, buffer);
     }
 
-    private void syncDirectTextureViewIfNeeded() {
-        if (!textureRegistered || directTexture == null || texture == null || texture.isClosed()) {
+    private void ensureTextureStorage_MCEF(int width, int height) {
+        if (textureWidth == width && textureHeight == height) {
             return;
         }
 
-        boolean needsRebind = !directTexture.isTextureViewReady()
-                || directTexture.getWidth() != textureWidth
-                || directTexture.getHeight() != textureHeight
-                || directTexture.getBoundTexture() != texture;
-        if (needsRebind) {
-            directTexture.bindTexture(texture, textureWidth, textureHeight);
-        }
+        int textureId = texture.getId();
+        TextureUtil.prepareImage(textureId, width, height);
+
+        texture.setFilter(true, false);
+        GlStateManager._texParameter(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        GlStateManager._texParameter(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+        textureWidth = width;
+        textureHeight = height;
+        textureUploaded = false;
     }
 
-    private void uploadWithCommandEncoder_MCEF(ByteBuffer buffer, int destinationX, int destinationY, int copyWidth, int copyHeight) {
-        if (texture == null || buffer == null) {
-            return;
+    private static final class ManagedTexture extends AbstractTexture {
+        @Override
+        public void load(ResourceManager resourceManager) {
         }
-
-        int requiredBytes = copyWidth * copyHeight * 4;
-        if (requiredBytes <= 0 || buffer.capacity() < requiredBytes) {
-            return;
-        }
-
-        ByteBuffer uploadBuffer = convertBgraToRgba_MCEF(buffer, requiredBytes);
-        if (uploadBuffer == null) {
-            return;
-        }
-
-        RenderSystem.getDevice()
-                .createCommandEncoder()
-                .writeToTexture(
-                        texture,
-                        uploadBuffer.slice(),
-                        NativeImage.Format.RGBA,
-                        0,
-                        0,
-                        destinationX,
-                        destinationY,
-                        copyWidth,
-                        copyHeight
-                );
     }
-
-    private ByteBuffer convertBgraToRgba_MCEF(ByteBuffer sourceBuffer, int requiredBytes) {
-        if (requiredBytes <= 0 || (requiredBytes & 3) != 0) {
-            return null;
-        }
-
-        if (fallbackRgbaUploadBuffer_MCEF == null || fallbackRgbaUploadBuffer_MCEF.capacity() < requiredBytes) {
-            fallbackRgbaUploadBuffer_MCEF = ByteBuffer.allocateDirect(requiredBytes);
-        }
-
-        ByteBuffer src = sourceBuffer.duplicate();
-        src.position(0);
-        src.limit(requiredBytes);
-
-        ByteBuffer dst = fallbackRgbaUploadBuffer_MCEF.duplicate();
-        dst.clear();
-        dst.limit(requiredBytes);
-
-        for (int i = 0; i < requiredBytes; i += 4) {
-            byte b = src.get(i);
-            byte g = src.get(i + 1);
-            byte r = src.get(i + 2);
-            byte a = src.get(i + 3);
-            dst.put(i, r);
-            dst.put(i + 1, g);
-            dst.put(i + 2, b);
-            dst.put(i + 3, a);
-        }
-
-        dst.position(0);
-        return dst;
-    }
-
 }
