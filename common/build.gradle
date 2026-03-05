@@ -1,57 +1,26 @@
+
 plugins {
-    id 'fabric-loom'
-    id 'maven-publish'
+    id 'java'
     id 'idea'
+    id 'maven-publish'
+    id "fabric-loom" version "$fabric_loom_version"
 }
 
-sourceCompatibility = JavaLanguageVersion.of(java_version as int)
-targetCompatibility = JavaLanguageVersion.of(java_version as int)
-
-repositories {
-    mavenCentral()
-    maven { url = 'https://maven.fabricmc.net/' }
-    mavenLocal()
-    maven {
-        name = 'ParchmentMC'
-        url = 'https://maven.parchmentmc.org'
-    }
-}
-
-/*
-    Add the following to ~/.gradle/gradle.properties
-    systemProp.org.gradle.s3.endpoint=https://<the s3 endpoint>
-    MCEF_S3_PUBLISH_URL_SNAPSHOT=s3://<bucket>/repositories/snapshots
-    MCEF_S3_PUBLISH_URL_RELEASE=s3://<bucket>/repositories/releases
-    MCEF_S3_PUBLISH_ACCESS_KEY=<access key>
-    MCEF_S3_PUBLISH_SECRET_KEY=<secret key>
- */
-publishing {
-    repositories {
-        maven {
-            url ((mcef_version.toString().endsWith("SNAPSHOT")) ? findProperty('MCEF_S3_PUBLISH_URL_SNAPSHOT') : findProperty('MCEF_S3_PUBLISH_URL_RELEASE'))
-            credentials(AwsCredentials) {
-                accessKey = findProperty('MCEF_S3_PUBLISH_ACCESS_KEY')
-                secretKey = findProperty('MCEF_S3_PUBLISH_SECRET_KEY')
-            }
-        }
-    }
-    publications {
-        mavenJava(MavenPublication) {
-            from components.java
-            groupId = 'com.cinemamod'
-            artifactId = 'mcef'
-            version = mcef_version
-        }
-    }
+base {
+    archivesName = "${mod_id}"
 }
 
 dependencies {
     minecraft "com.mojang:minecraft:${minecraft_version}"
     mappings loom.layered() {
         officialMojangMappings()
-        parchment("org.parchmentmc.data:parchment-1.21:2024.07.28@zip")
+        parchment("org.parchmentmc.data:parchment-${parchment_mc_version}:${parchment_version}@zip")
     }
-    modImplementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
+    implementation group: 'com.google.code.findbugs', name: 'jsr305', version: '3.0.2'
+    implementation group: 'org.ow2.asm', name: 'asm-tree', version: '9.7'
+    annotationProcessor group: 'org.ow2.asm', name: 'asm-util', version: '9.7'
+    compileOnly(annotationProcessor("io.github.llamalad7:mixinextras-common:${mixin_extras_version}"))
+    compileOnly group:'org.spongepowered', name:'mixin', version:'0.8.5'
 }
 
 sourceSets {
@@ -68,16 +37,37 @@ sourceSets {
     }
 }
 
+loom {
+    if (file("src/main/resources/${mod_id}.accesswidener").exists()) {
+        accessWidenerPath.set(file("src/main/resources/${mod_id}.accesswidener"))
+    }
+    mixin {
+        useLegacyMixinAp = true
+        defaultRefmapName.set("${mod_id}.refmap.json")
+    }
+}
+
 processResources.dependsOn(processJcefResources)
 
-jar {
+tasks.named("jar", Jar).configure {
     from sourceSets.jcef.output.classesDirs
     from sourceSets.jcef.output.resourcesDir
 }
 
-idea {
-    module {
-        excludeDirs += file("java-cef/java/tests")
-        inheritOutputDirs true
+tasks.named("sourcesJar", Jar).configure {
+    from(sourceSets.jcef.allSource)
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            artifactId base.archivesName.get()
+            from components.java
+        }
+    }
+    repositories {
+        maven {
+            url "file://" + System.getenv("local_maven")
+        }
     }
 }

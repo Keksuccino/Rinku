@@ -21,9 +21,10 @@
 package com.cinemamod.mcef;
 
 import com.cinemamod.mcef.listeners.MCEFCursorChangeListener;
-import com.mojang.blaze3d.platform.GlStateManager;
+import com.mojang.blaze3d.opengl.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
+import net.minecraft.resources.Identifier;
 import org.cef.browser.CefBrowser;
 import org.cef.browser.CefBrowserOsr;
 import org.cef.callback.CefDragData;
@@ -33,13 +34,12 @@ import org.cef.event.CefMouseWheelEvent;
 import org.cef.misc.CefCursorType;
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.system.MemoryUtil;
-import org.lwjgl.system.libc.LibCString;
-
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.awt.*;
 import java.nio.ByteBuffer;
-
-import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL11.*;
+import static org.lwjgl.glfw.GLFW.*;
 
 /**
  * An instance of an "Off-screen rendered" Chromium web browser.
@@ -47,6 +47,8 @@ import static org.lwjgl.opengl.GL11.*;
  * browser control shortcuts, cursor handling, drag & drop support.
  */
 public class MCEFBrowser extends CefBrowserOsr {
+    private static final Logger LOGGER = LoggerFactory.getLogger("MCEF");
+
     /**
      * The renderer for the browser.
      */
@@ -76,24 +78,52 @@ public class MCEFBrowser extends CefBrowserOsr {
      * CEF is a bit odd and implements mouse buttons as a part of modifier flags.
      */
     private int btnMask = 0;
+    /**
+     * Tracks right-alt state so we can distinguish AltGr text input
+     * from regular Ctrl+Alt shortcuts.
+     */
+    private boolean rightAltDown_MCEF = false;
 
     // Data relating to popups and graphics
     // Marked as protected in-case a mod wants to extend MCEFBrowser and override the repaint logic
-    protected ByteBuffer popupGraphics;
-    protected Rectangle popupSize;
-    protected boolean showPopup = false;
-    protected boolean popupDrawn = false;
+    protected volatile ByteBuffer popupGraphics;
+    protected volatile Rectangle popupSize;
+    protected volatile boolean showPopup = false;
+    protected volatile boolean popupDrawn = false;
 
     public MCEFBrowser(MCEFClient client, String url, boolean transparent) {
         super(client.getHandle(), url, transparent, null);
         renderer = new MCEFRenderer(transparent);
-        cursorChangeListener = (cefCursorID) -> setCursor(CefCursorType.fromId(cefCursorID));
+        cursorChangeListener = (cefCursorID) -> setCursor(resolveCursorType_MCEF(cefCursorID));
 
-        Minecraft.getInstance().submit(renderer::initialize);
+        if (RenderSystem.isOnRenderThread()) {
+            renderer.initialize();
+        } else {
+            Minecraft.getInstance().submit(renderer::initialize);
+        }
     }
 
     public MCEFRenderer getRenderer() {
         return renderer;
+    }
+    
+    /**
+     * Convenience method to get the Identifier for this browser's texture.
+     * This can be used directly with GuiGraphics rendering methods.
+     * 
+     * @return The Identifier for this browser's texture, or null if not initialized
+     */
+    public Identifier getTextureIdentifier() {
+        return renderer != null && renderer.isTextureReady() ? renderer.getTextureIdentifier() : null;
+    }
+    
+    /**
+     * Check if the browser's texture is ready for rendering.
+     * 
+     * @return true if the texture is initialized and ready to be rendered
+     */
+    public boolean isTextureReady() {
+        return renderer != null && renderer.isTextureReady();
     }
 
     public MCEFCursorChangeListener getCursorChangeListener() {
@@ -129,95 +159,250 @@ public class MCEFBrowser extends CefBrowserOsr {
     public void onPopupShow(CefBrowser browser, boolean show) {
         super.onPopupShow(browser, show);
         showPopup = show;
-        if (!show) popupDrawn = false;
     }
 
     @Override
     public void onPopupSize(CefBrowser browser, Rectangle size) {
         super.onPopupSize(browser, size);
-        popupSize = size;
-        this.popupGraphics = ByteBuffer.allocateDirect(
-                size.width * size.height * 4
-        );
+        if (size == null || size.width <= 0 || size.height <= 0) {
+            popupSize = null;
+            popupGraphics = null;
+            popupDrawn = false;
+            return;
+        }
+
+        popupSize = new Rectangle(size);
+        int popupBufferSize = getRequiredBufferSize_MCEF(size.width, size.height);
+        if (popupBufferSize <= 0) {
+            popupGraphics = null;
+            popupDrawn = false;
+            return;
+        }
+
+        if (popupGraphics == null || popupGraphics.capacity() != popupBufferSize) {
+            popupGraphics = ByteBuffer.allocateDirect(popupBufferSize);
+        }
     }
 
     // Graphics
     @Override
     public void onPaint(CefBrowser browser, boolean popup, Rectangle[] dirtyRects, ByteBuffer buffer, int width, int height) {
-        // nothing to update
-        if (dirtyRects.length == 0)
+        if (dirtyRects == null || dirtyRects.length == 0 || buffer == null)
             return;
 
+        Rectangle[] dirtyRectsCopy = new Rectangle[dirtyRects.length];
+        for (int i = 0; i < dirtyRects.length; i++) {
+            Rectangle dirtyRect = dirtyRects[i];
+            dirtyRectsCopy[i] = dirtyRect == null ? null : new Rectangle(dirtyRect);
+        }
+
+        Rectangle popupRectSnapshot = popupSize == null ? null : new Rectangle(popupSize);
+        boolean showPopupSnapshot = showPopup;
+
+        if (RenderSystem.isOnRenderThread()) {
+            onPaintRenderThread_MCEF(
+                    popup,
+                    dirtyRectsCopy,
+                    buffer,
+                    width,
+                    height,
+                    popupRectSnapshot,
+                    showPopupSnapshot
+            );
+            return;
+        }
+
+        ByteBuffer bufferCopy = cloneBufferForAsyncPaint_MCEF(buffer);
+        Minecraft.getInstance().submit(() -> {
+            try {
+                onPaintRenderThread_MCEF(
+                        popup,
+                        dirtyRectsCopy,
+                        bufferCopy,
+                        width,
+                        height,
+                        popupRectSnapshot,
+                        showPopupSnapshot
+                );
+            } finally {
+                MemoryUtil.memFree(bufferCopy);
+            }
+        });
+    }
+
+    private void onPaintRenderThread_MCEF(
+            boolean popup,
+            Rectangle[] dirtyRects,
+            ByteBuffer buffer,
+            int width,
+            int height,
+            Rectangle popupRect,
+            boolean showPopupSnapshot
+    ) {
         if (!popup) {
             if (lastWidth != width || lastHeight != height) {
                 lastWidth = width;
                 lastHeight = height;
-                // upload full texture
-                // this also sets up the texture size and creates the texture
                 renderer.onPaint(buffer, width, height);
-            } else {
-                if (renderer.getTextureID() == 0) return;
-                RenderSystem.bindTexture(renderer.getTextureID());
-                RenderSystem.pixelStore(GL_UNPACK_ROW_LENGTH, width);
-                for (Rectangle dirtyRect : dirtyRects) {
-                    GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, dirtyRect.x);
-                    GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, dirtyRect.y);
-                    renderer.onPaint(buffer, dirtyRect.x, dirtyRect.y, dirtyRect.width, dirtyRect.height);
+                return;
+            }
+
+            if (!renderer.supportsDirtyRectUpload()) {
+                renderer.onPaint(buffer, width, height);
+                if (!showPopupSnapshot) {
+                    popupGraphics = null;
+                    popupSize = null;
+                    popupDrawn = false;
                 }
-                if ((popupDrawn || showPopup) && popupSize != null) {
-                    // interpret where the popup was as a dirty rect
-                    if (!showPopup) {
-                        // if the popup is not visible, just draw the contents of the buffer
-                        GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, popupSize.width);
-                        GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, popupSize.height);
-                        renderer.onPaint(buffer, popupSize.x, popupSize.y, popupSize.width, popupSize.height);
-                        popupGraphics = null;
-                        popupSize = null;
-                    } else if (popupDrawn) {
-                        // else, a use copy of the popup graphics, as it needs to remain visible
-                        // and for some reason that I do not for the life of me understand, chromium does not seem to keep this data in memory outside of the paint loop, meaning it has to be copied around, which wastes performance
-                        RenderSystem.pixelStore(GL_UNPACK_ROW_LENGTH, popupSize.width);
-                        GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, 0);
-                        GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, 0);
-                        renderer.onPaint(popupGraphics, popupSize.x, popupSize.y, popupSize.width, popupSize.height);
+                return;
+            }
+
+            GlStateManager._bindTexture(renderer.getTextureID());
+            GlStateManager._pixelStore(GL_UNPACK_ROW_LENGTH, width);
+
+            for (Rectangle dirtyRect : dirtyRects) {
+                Rectangle clippedRect = clipRect_MCEF(dirtyRect, width, height);
+                if (clippedRect == null) {
+                    continue;
+                }
+
+                GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, clippedRect.x);
+                GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, clippedRect.y);
+                renderer.onPaint(buffer, clippedRect.x, clippedRect.y, clippedRect.width, clippedRect.height);
+            }
+
+            if ((popupDrawn || showPopupSnapshot) && popupRect != null) {
+                Rectangle clippedPopupRect = clipRect_MCEF(popupRect, width, height);
+                if (clippedPopupRect == null) {
+                    popupGraphics = null;
+                    popupSize = null;
+                    popupDrawn = false;
+                    return;
+                }
+
+                if (!showPopupSnapshot) {
+                    GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, clippedPopupRect.x);
+                    GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, clippedPopupRect.y);
+                    renderer.onPaint(buffer, clippedPopupRect.x, clippedPopupRect.y, clippedPopupRect.width, clippedPopupRect.height);
+                    popupGraphics = null;
+                    popupSize = null;
+                    popupDrawn = false;
+                } else if (popupDrawn) {
+                    ByteBuffer popupBuffer = popupGraphics;
+                    int requiredPopupBufferSize = getRequiredBufferSize_MCEF(popupRect.width, popupRect.height);
+                    if (popupBuffer == null || requiredPopupBufferSize <= 0 || popupBuffer.capacity() < requiredPopupBufferSize) {
+                        return;
                     }
+
+                    GlStateManager._pixelStore(GL_UNPACK_ROW_LENGTH, popupRect.width);
+                    GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, clippedPopupRect.x - popupRect.x);
+                    GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, clippedPopupRect.y - popupRect.y);
+                    renderer.onPaint(popupBuffer, clippedPopupRect.x, clippedPopupRect.y, clippedPopupRect.width, clippedPopupRect.height);
                 }
             }
         } else {
-            if (renderer.getTextureID() == 0) return;
-            RenderSystem.bindTexture(renderer.getTextureID());
-            int start = buffer.capacity();
-            int end = 0;
+            if (popupRect == null || popupRect.width <= 0 || popupRect.height <= 0 || !renderer.supportsDirtyRectUpload()) {
+                return;
+            }
+
+            GlStateManager._bindTexture(renderer.getTextureID());
+
+            ByteBuffer popupBuffer = popupGraphics;
+            int requiredPopupBufferSize = getRequiredBufferSize_MCEF(popupRect.width, popupRect.height);
+            if (requiredPopupBufferSize <= 0) {
+                popupGraphics = null;
+                popupDrawn = false;
+                return;
+            }
+
+            if (popupBuffer == null || popupBuffer.capacity() != requiredPopupBufferSize) {
+                popupBuffer = ByteBuffer.allocateDirect(requiredPopupBufferSize);
+                popupGraphics = popupBuffer;
+            }
+
+            boolean paintedAnyRect = false;
             for (Rectangle dirtyRect : dirtyRects) {
-                RenderSystem.pixelStore(GL_UNPACK_ROW_LENGTH, popupSize.width);
-                GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, dirtyRect.x);
-                GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, dirtyRect.y);
-                renderer.onPaint(buffer, popupSize.x + dirtyRect.x, popupSize.y + dirtyRect.y, dirtyRect.width, dirtyRect.height);
-
-                int rectStart = (dirtyRect.x + ((dirtyRect.y) * popupSize.width)) << 2;
-                if (rectStart < start) start = rectStart;
-
-                int rectEnd = ((dirtyRect.x + dirtyRect.width) + ((dirtyRect.y + popupSize.height) * dirtyRect.width)) << 2;
-                if (rectEnd > end) end = rectEnd;
-            }
-            if (start < 0) start = 0;
-            if (end > buffer.capacity()) end = buffer.capacity();
-
-            if (end > start) {
-                // TODO: check if it's more performant to go for row-wise copies or if it's better to just copy the updated region
-                if (this.popupGraphics != null) {
-                    long addrFrom = MemoryUtil.memAddress(buffer);
-                    long addrTo = MemoryUtil.memAddress(popupGraphics);
-                    MemoryUtil.memCopy(
-                            addrFrom + start,
-                            addrTo + start,
-                            (end - start)
-                    );
+                Rectangle clippedRect = clipRect_MCEF(dirtyRect, Math.min(width, popupRect.width), Math.min(height, popupRect.height));
+                if (clippedRect == null) {
+                    continue;
                 }
+
+                GlStateManager._pixelStore(GL_UNPACK_ROW_LENGTH, width);
+                GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, clippedRect.x);
+                GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, clippedRect.y);
+                renderer.onPaint(
+                        buffer,
+                        popupRect.x + clippedRect.x,
+                        popupRect.y + clippedRect.y,
+                        clippedRect.width,
+                        clippedRect.height
+                );
+
+                copyRectRows_MCEF(
+                        buffer,
+                        width,
+                        popupBuffer,
+                        popupRect.width,
+                        clippedRect
+                );
+                paintedAnyRect = true;
             }
 
-            popupDrawn = true;
+            popupDrawn = paintedAnyRect;
         }
+    }
+
+    private static void copyRectRows_MCEF(ByteBuffer src, int srcWidth, ByteBuffer dst, int dstWidth, Rectangle rect) {
+        long srcAddr = MemoryUtil.memAddress(src);
+        long dstAddr = MemoryUtil.memAddress(dst);
+        int bytesPerRow = rect.width << 2;
+        for (int row = 0; row < rect.height; row++) {
+            int srcOffset = ((rect.y + row) * srcWidth + rect.x) << 2;
+            int dstOffset = ((rect.y + row) * dstWidth + rect.x) << 2;
+            MemoryUtil.memCopy(srcAddr + srcOffset, dstAddr + dstOffset, bytesPerRow);
+        }
+    }
+
+    private static Rectangle clipRect_MCEF(Rectangle rect, int maxWidth, int maxHeight) {
+        if (rect == null || maxWidth <= 0 || maxHeight <= 0) {
+            return null;
+        }
+
+        int x = Math.max(0, rect.x);
+        int y = Math.max(0, rect.y);
+        int maxX = Math.min(maxWidth, rect.x + rect.width);
+        int maxY = Math.min(maxHeight, rect.y + rect.height);
+        int width = maxX - x;
+        int height = maxY - y;
+
+        if (width <= 0 || height <= 0) {
+            return null;
+        }
+
+        return new Rectangle(x, y, width, height);
+    }
+
+    private static int getRequiredBufferSize_MCEF(int width, int height) {
+        if (width <= 0 || height <= 0) {
+            return 0;
+        }
+
+        long bufferSize = (long) width * height * 4L;
+        if (bufferSize <= 0L || bufferSize > Integer.MAX_VALUE) {
+            return 0;
+        }
+
+        return (int) bufferSize;
+    }
+
+    private static ByteBuffer cloneBufferForAsyncPaint_MCEF(ByteBuffer source) {
+        ByteBuffer sourceSlice = source.duplicate();
+        sourceSlice.clear();
+
+        ByteBuffer copy = MemoryUtil.memAlloc(sourceSlice.remaining());
+        copy.put(sourceSlice);
+        copy.flip();
+        return copy;
     }
 
     public void resize(int width, int height) {
@@ -227,8 +412,11 @@ public class MCEFBrowser extends CefBrowserOsr {
 
     // Inputs
     public void sendKeyPress(int keyCode, long scanCode, int modifiers) {
+        updateModifierStateOnKeyPress_MCEF(keyCode);
+        int normalizedModifiers = normalizeAltGrModifiers_MCEF(modifiers);
+
         if (browserControls) {
-            if (modifiers == GLFW_MOD_CONTROL) {
+            if (normalizedModifiers == GLFW_MOD_CONTROL) {
                 if (keyCode == GLFW_KEY_R) {
                     reload();
                     return;
@@ -242,7 +430,7 @@ public class MCEFBrowser extends CefBrowserOsr {
                     setZoomLevel(0);
                     return;
                 }
-            } else if (modifiers == GLFW_MOD_ALT) {
+            } else if (normalizedModifiers == GLFW_MOD_ALT) {
                 if (keyCode == GLFW_KEY_LEFT && canGoBack()) {
                     goBack();
                     return;
@@ -253,44 +441,78 @@ public class MCEFBrowser extends CefBrowserOsr {
             }
         }
 
-        CefKeyEvent e = new CefKeyEvent(CefKeyEvent.KEY_PRESS, keyCode, (char) keyCode, modifiers);
+        CefKeyEvent e = new CefKeyEvent(CefKeyEvent.KEY_PRESS, keyCode, (char) keyCode, normalizedModifiers);
         e.scancode = scanCode;
         sendKeyEvent(e);
     }
 
     public void sendKeyRelease(int keyCode, long scanCode, int modifiers) {
+        int normalizedModifiers = normalizeAltGrModifiers_MCEF(modifiers);
+
         if (browserControls) {
-            if (modifiers == GLFW_MOD_CONTROL) {
+            if (normalizedModifiers == GLFW_MOD_CONTROL) {
                 if (keyCode == GLFW_KEY_R) return;
                 else if (keyCode == GLFW_KEY_EQUAL) return;
                 else if (keyCode == GLFW_KEY_MINUS) return;
                 else if (keyCode == GLFW_KEY_0) return;
-            } else if (modifiers == GLFW_MOD_ALT) {
+            } else if (normalizedModifiers == GLFW_MOD_ALT) {
                 if (keyCode == GLFW_KEY_LEFT && canGoBack()) return;
                 else if (keyCode == GLFW_KEY_RIGHT && canGoForward()) return;
             }
         }
 
-        CefKeyEvent e = new CefKeyEvent(CefKeyEvent.KEY_RELEASE, keyCode, (char) keyCode, modifiers);
+        CefKeyEvent e = new CefKeyEvent(CefKeyEvent.KEY_RELEASE, keyCode, (char) keyCode, normalizedModifiers);
         e.scancode = scanCode;
         sendKeyEvent(e);
+        updateModifierStateOnKeyRelease_MCEF(keyCode);
     }
 
     public void sendKeyTyped(char c, int modifiers) {
+        int normalizedModifiers = normalizeAltGrModifiers_MCEF(modifiers);
+
         if (browserControls) {
-            if (modifiers == GLFW_MOD_CONTROL) {
+            if (normalizedModifiers == GLFW_MOD_CONTROL) {
                 if ((int) c == GLFW_KEY_R) return;
                 else if ((int) c == GLFW_KEY_EQUAL) return;
                 else if ((int) c == GLFW_KEY_MINUS) return;
                 else if ((int) c == GLFW_KEY_0) return;
-            } else if (modifiers == GLFW_MOD_ALT) {
+            } else if (normalizedModifiers == GLFW_MOD_ALT) {
                 if ((int) c == GLFW_KEY_LEFT && canGoBack()) return;
                 else if ((int) c == GLFW_KEY_RIGHT && canGoForward()) return;
             }
         }
 
-        CefKeyEvent e = new CefKeyEvent(CefKeyEvent.KEY_TYPE, c, c, modifiers);
+        CefKeyEvent e = new CefKeyEvent(CefKeyEvent.KEY_TYPE, c, c, normalizedModifiers);
         sendKeyEvent(e);
+    }
+
+    private void updateModifierStateOnKeyPress_MCEF(int keyCode) {
+        if (keyCode == GLFW_KEY_RIGHT_ALT) {
+            rightAltDown_MCEF = true;
+        }
+    }
+
+    private void updateModifierStateOnKeyRelease_MCEF(int keyCode) {
+        if (keyCode == GLFW_KEY_RIGHT_ALT) {
+            rightAltDown_MCEF = false;
+        }
+    }
+
+    private int normalizeAltGrModifiers_MCEF(int modifiers) {
+        if (rightAltDown_MCEF && (modifiers & GLFW_MOD_ALT) == 0) {
+            rightAltDown_MCEF = false;
+        }
+
+        // GLFW reports AltGr as Ctrl+Alt on many layouts.
+        if (!rightAltDown_MCEF) {
+            return modifiers;
+        }
+
+        if ((modifiers & GLFW_MOD_CONTROL) == 0 || (modifiers & GLFW_MOD_ALT) == 0) {
+            return modifiers;
+        }
+
+        return modifiers & ~(GLFW_MOD_CONTROL | GLFW_MOD_ALT);
     }
 
     public void sendMouseMove(int mouseX, int mouseY) {
@@ -385,7 +607,7 @@ public class MCEFBrowser extends CefBrowserOsr {
 
     // Expose drag & drop functions
     public void startDragging(CefDragData dragData, int mask, int x, int y) { // Overload since the JCEF method requires a browser, which then goes unused
-        startDragging(dragData, mask, x, y);
+        startDragging(this, dragData, mask, x, y);
     }
 
     public void finishDragging(int x, int y) {
@@ -403,9 +625,31 @@ public class MCEFBrowser extends CefBrowserOsr {
 
     // Closing
     public void close() {
-        renderer.cleanup();
-        cursorChangeListener.onCursorChange(0);
+        cleanupBrowserResourcesOnRenderThread_MCEF();
         super.close(true);
+    }
+
+    private void cleanupBrowserResourcesOnRenderThread_MCEF() {
+        if (RenderSystem.isOnRenderThread()) {
+            renderer.cleanup();
+            cursorChangeListener.onCursorChange(0);
+            return;
+        }
+
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft == null || !minecraft.isRunning()) {
+            LOGGER.debug("Skipping browser GL cleanup because the Minecraft render thread is no longer running.");
+            return;
+        }
+
+        try {
+            minecraft.submit(() -> {
+                renderer.cleanup();
+                cursorChangeListener.onCursorChange(0);
+            }).join();
+        } catch (Throwable throwable) {
+            LOGGER.warn("Failed to marshal browser cleanup to the render thread.", throwable);
+        }
     }
 
     @Override
@@ -424,10 +668,19 @@ public class MCEFBrowser extends CefBrowserOsr {
 
     public void setCursor(CefCursorType cursorType) {
         if (cursorType == CefCursorType.NONE) {
-            GLFW.glfwSetInputMode(Minecraft.getInstance().getWindow().getWindow(), GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+            GLFW.glfwSetInputMode(Minecraft.getInstance().getWindow().handle(), GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
         } else {
-            GLFW.glfwSetInputMode(Minecraft.getInstance().getWindow().getWindow(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-            GLFW.glfwSetCursor(Minecraft.getInstance().getWindow().getWindow(), MCEF.getGLFWCursorHandle(cursorType));
+            GLFW.glfwSetInputMode(Minecraft.getInstance().getWindow().handle(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+            GLFW.glfwSetCursor(Minecraft.getInstance().getWindow().handle(), MCEF.getGLFWCursorHandle(cursorType));
         }
     }
+
+    private static CefCursorType resolveCursorType_MCEF(int cursorTypeId) {
+        CefCursorType[] cursorTypes = CefCursorType.values();
+        if (cursorTypeId < 0 || cursorTypeId >= cursorTypes.length) {
+            return CefCursorType.POINTER;
+        }
+        return cursorTypes[cursorTypeId];
+    }
+
 }

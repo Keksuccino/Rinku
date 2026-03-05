@@ -49,23 +49,25 @@ public enum MCEFPlatform {
     public static MCEFPlatform getPlatform() {
         String os = System.getProperty("os.name").toLowerCase(Locale.US);
         String arch = System.getProperty("os.arch").toLowerCase(Locale.US);
+        boolean amd64 = arch.equals("amd64") || arch.equals("x86_64");
+        boolean arm64 = arch.equals("aarch64") || arch.equals("arm64");
 
         if (os.startsWith("linux")) {
-            if (arch.equals("amd64")) {
+            if (amd64) {
                 return LINUX_AMD64;
-            } else if (arch.equals("aarch64")) {
+            } else if (arm64) {
                 return LINUX_ARM64;
             }
         } else if (os.startsWith("windows")) {
-            if (arch.equals("amd64")) {
+            if (amd64) {
                 return WINDOWS_AMD64;
-            } else if (arch.equals("aarch64")) {
+            } else if (arm64) {
                 return WINDOWS_ARM64;
             }
-        } else if (os.startsWith("mac os x")) {
-            if (arch.equals("x86_64")) {
+        } else if (os.startsWith("mac os x") || os.startsWith("macos")) {
+            if (amd64) {
                 return MACOS_AMD64;
-            } else if (arch.equals("aarch64")) {
+            } else if (arm64) {
                 return MACOS_ARM64;
             }
         }

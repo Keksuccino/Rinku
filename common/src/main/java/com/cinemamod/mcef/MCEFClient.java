@@ -24,28 +24,37 @@ import org.cef.CefClient;
 import org.cef.CefSettings;
 import org.cef.browser.CefBrowser;
 import org.cef.browser.CefFrame;
+import org.cef.callback.CefBeforeDownloadCallback;
 import org.cef.callback.CefContextMenuParams;
+import org.cef.callback.CefDownloadItem;
+import org.cef.callback.CefDownloadItemCallback;
 import org.cef.callback.CefMenuModel;
 import org.cef.handler.CefAudioHandler;
 import org.cef.handler.CefContextMenuHandler;
 import org.cef.handler.CefDisplayHandler;
+import org.cef.handler.CefDownloadHandler;
 import org.cef.handler.CefLoadHandler;
 import org.cef.misc.CefAudioParameters;
 import org.cef.misc.DataPointer;
 import org.cef.network.CefRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * A wrapper around {@link CefClient}
  */
-public class MCEFClient implements CefLoadHandler, CefContextMenuHandler, CefDisplayHandler, CefAudioHandler {
+public class MCEFClient implements CefLoadHandler, CefContextMenuHandler, CefDisplayHandler, CefAudioHandler, CefDownloadHandler {
+    private static final Logger LOGGER = LoggerFactory.getLogger("MCEF");
+
     private final CefClient handle;
-    private final List<CefLoadHandler> loadHandlers = new ArrayList<>();
-    private final List<CefContextMenuHandler> contextMenuHandlers = new ArrayList<>();
-    private final List<CefDisplayHandler> displayHandlers = new ArrayList<>();
-    private final List<CefAudioHandler> audioHandlers = new ArrayList<>();
+    private final List<CefLoadHandler> loadHandlers = new CopyOnWriteArrayList<>();
+    private final List<CefContextMenuHandler> contextMenuHandlers = new CopyOnWriteArrayList<>();
+    private final List<CefDisplayHandler> displayHandlers = new CopyOnWriteArrayList<>();
+    private final List<CefAudioHandler> audioHandlers = new CopyOnWriteArrayList<>();
+    private final List<CefDownloadHandler> downloadHandlers = new CopyOnWriteArrayList<>();
 
     public MCEFClient(CefClient cefClient) {
         handle = cefClient;
@@ -53,6 +62,7 @@ public class MCEFClient implements CefLoadHandler, CefContextMenuHandler, CefDis
         cefClient.addContextMenuHandler(this);
         cefClient.addDisplayHandler(this);
         cefClient.addAudioHandler(this);
+        cefClient.addDownloadHandler(this);
     }
 
     public CefClient getHandle() {
@@ -113,6 +123,10 @@ public class MCEFClient implements CefLoadHandler, CefContextMenuHandler, CefDis
         displayHandlers.add(handler);
     }
 
+    public void removeDisplayHandler(CefDisplayHandler handler) {
+        displayHandlers.remove(handler);
+    }
+
     @Override
     public void onAddressChange(CefBrowser browser, CefFrame frame, String url) {
         for (CefDisplayHandler displayHandler : displayHandlers) displayHandler.onAddressChange(browser, frame, url);
@@ -141,7 +155,13 @@ public class MCEFClient implements CefLoadHandler, CefContextMenuHandler, CefDis
         for (CefDisplayHandler displayHandler : displayHandlers)
             if (displayHandler.onConsoleMessage(browser, level, message, source, line))
                 return true;
-        return false;
+
+        if (shouldForwardConsoleMessageToMcLog_MCEF(level)) {
+            logConsoleMessageToMcLog_MCEF(browser, level, message, source, line);
+        }
+
+        // Always consume here so CEF doesn't bypass our filtering and spam the process console.
+        return true;
     }
 
     @Override
@@ -191,6 +211,82 @@ public class MCEFClient implements CefLoadHandler, CefContextMenuHandler, CefDis
         for (CefAudioHandler audioHandler : audioHandlers) {
             audioHandler.onAudioStreamError(browser, text);
         }
-        MCEF.getLogger().warn("An audio stream threw an error: " + text);
+        LOGGER.warn("An audio stream threw an error: " + text);
+    }
+
+    public void addDownloadHandler(CefDownloadHandler handler) {
+        downloadHandlers.add(handler);
+    }
+
+    @Override
+    public void onBeforeDownload(CefBrowser browser, CefDownloadItem downloadItem, String suggestedName, CefBeforeDownloadCallback callback) {
+        if (downloadHandlers.isEmpty()) {
+            // Open the native Save As dialog. Canceling the dialog cancels the download.
+            callback.Continue(suggestedName == null ? "" : suggestedName, true);
+            return;
+        }
+        downloadHandlers.get(0).onBeforeDownload(browser, downloadItem, suggestedName, callback);
+    }
+
+    @Override
+    public void onDownloadUpdated(CefBrowser browser, CefDownloadItem downloadItem, CefDownloadItemCallback callback) {
+        if (downloadHandlers.isEmpty()) {
+            return;
+        }
+        downloadHandlers.get(0).onDownloadUpdated(browser, downloadItem, callback);
+    }
+
+    private static boolean shouldForwardConsoleMessageToMcLog_MCEF(CefSettings.LogSeverity level) {
+        CefSettings.LogSeverity threshold = MCEF.getSettings().getConsoleLogForwardingMinSeverity();
+        CefSettings.LogSeverity effectiveThreshold = threshold == null
+                ? CefSettings.LogSeverity.LOGSEVERITY_DISABLE
+                : threshold;
+        if (effectiveThreshold == CefSettings.LogSeverity.LOGSEVERITY_DISABLE) {
+            return false;
+        }
+
+        CefSettings.LogSeverity effectiveLevel = level == null
+                ? CefSettings.LogSeverity.LOGSEVERITY_DEFAULT
+                : level;
+        return getSeverityRank_MCEF(effectiveLevel) >= getSeverityRank_MCEF(effectiveThreshold);
+    }
+
+    private static int getSeverityRank_MCEF(CefSettings.LogSeverity severity) {
+        return switch (severity) {
+            case LOGSEVERITY_VERBOSE -> 0;
+            case LOGSEVERITY_DEFAULT, LOGSEVERITY_INFO -> 1;
+            case LOGSEVERITY_WARNING -> 2;
+            case LOGSEVERITY_ERROR -> 3;
+            case LOGSEVERITY_FATAL -> 4;
+            case LOGSEVERITY_DISABLE -> 5;
+        };
+    }
+
+    private static void logConsoleMessageToMcLog_MCEF(
+            CefBrowser browser,
+            CefSettings.LogSeverity level,
+            String message,
+            String source,
+            int line
+    ) {
+        int browserId = browser == null ? -1 : browser.getIdentifier();
+        String sourceValue = source == null || source.isBlank() ? "<unknown>" : source;
+        String messageValue = message == null ? "<null>" : message;
+        CefSettings.LogSeverity effectiveLevel = level == null
+                ? CefSettings.LogSeverity.LOGSEVERITY_DEFAULT
+                : level;
+
+        switch (effectiveLevel) {
+            case LOGSEVERITY_VERBOSE -> LOGGER.debug("[CEF Console][{}] {}:{} - {}", browserId, sourceValue, line, messageValue);
+            case LOGSEVERITY_DEFAULT, LOGSEVERITY_INFO ->
+                    LOGGER.info("[CEF Console][{}] {}:{} - {}", browserId, sourceValue, line, messageValue);
+            case LOGSEVERITY_WARNING ->
+                    LOGGER.warn("[CEF Console][{}] {}:{} - {}", browserId, sourceValue, line, messageValue);
+            case LOGSEVERITY_ERROR, LOGSEVERITY_FATAL ->
+                    LOGGER.error("[CEF Console][{}] {}:{} - {}", browserId, sourceValue, line, messageValue);
+            case LOGSEVERITY_DISABLE -> {
+                // Nothing to forward.
+            }
+        }
     }
 }

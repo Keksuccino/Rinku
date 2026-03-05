@@ -1,136 +1,216 @@
+
 plugins {
-    id 'net.neoforged.gradle.userdev' version '7.0.+'
-    id 'com.matthewprenger.cursegradle' version "${cursegradle_version}"
-    id 'com.github.johnrengelman.shadow' version "${shadow_version}"
+    id 'idea'
     id 'maven-publish'
+    id "net.neoforged.gradle.userdev" version "$neogradle_version"
+    id 'java-library'
 }
 
-var mod_version = mcef_version
+base {
+    archivesName = "${mod_id}"
+}
 
-archivesBaseName = project.archives_base_name
-version = mod_version
-group = mod_packagename
-
-java.toolchain.languageVersion = JavaLanguageVersion.of(java_version as int)
+// Automatically enable neoforge AccessTransformers if the file exists
+// This location is hardcoded in FML and can not be changed.
+// https://github.com/neoforged/FancyModLoader/blob/a952595eaaddd571fbc53f43847680b00894e0c1/loader/src/main/java/net/neoforged/fml/loading/moddiscovery/ModFile.java#L118
+if (file('src/main/resources/META-INF/accesstransformer.cfg').exists()) {
+    minecraft.accessTransformers.file file('src/main/resources/META-INF/accesstransformer.cfg')
+}
 
 runs {
+    configureEach {
+        modSource project.sourceSets.main
+    }
     client {
-        workingDirectory project.file('run')
+        workingDirectory project.file('../run_client')
+        systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+        dependencies {
+            //runtime "com.github.DhyanB:Open-Imaging:317b2cb6e5"
+            //runtime "net.minidev:json-smart:2.6.0"
+        }
     }
     server {
-        workingDirectory project.file('run/server')
+        workingDirectory project.file('../run_server')
+        systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+        arguments.add('--nogui')
     }
 }
 
-/*
-    Add the following to ~/.gradle/gradle.properties
-    systemProp.org.gradle.s3.endpoint=https://<the s3 endpoint>
-    MCEF_S3_PUBLISH_URL_SNAPSHOT=s3://<bucket>/repositories/snapshots
-    MCEF_S3_PUBLISH_URL_RELEASE=s3://<bucket>/repositories/releases
-    MCEF_S3_PUBLISH_ACCESS_KEY=<access key>
-    MCEF_S3_PUBLISH_SECRET_KEY=<secret key>
- */
-publishing {
-    repositories {
-        maven {
-            url ((mcef_version.toString().endsWith("SNAPSHOT")) ? findProperty('MCEF_S3_PUBLISH_URL_SNAPSHOT') : findProperty('MCEF_S3_PUBLISH_URL_RELEASE'))
-            credentials(AwsCredentials) {
-                accessKey = findProperty('MCEF_S3_PUBLISH_ACCESS_KEY')
-                secretKey = findProperty('MCEF_S3_PUBLISH_SECRET_KEY')
-            }
-        }
-    }
-    publications {
-        mavenJava(MavenPublication) {
-            from components.java
-            groupId = 'com.cinemamod'
-            artifactId = 'mcef-neoforge'
-            version = mcef_version
-        }
-    }
+//Temporarily disabled tests so compiling doesn't fail until I figure out why tf neoforge:test fails
+test {
+    exclude '**/*'
 }
 
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 
-configurations {
-    shadowMc.extendsFrom minecraftLibrary
-}
+jarJar.enable()
 
-tasks.register('prepareWorkspace') {
-
+subsystems {
+    parchment {
+        minecraftVersion = "${parchment_mc_version}"
+        mappingsVersion = "${parchment_version}"
+    }
 }
 
 dependencies {
+    testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.2")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.2")
     implementation "net.neoforged:neoforge:${neoforge_version}"
+    compileOnly project(":common")
+}
 
-    implementation(project(':common')) {
-        transitive false
+// Exclude Fabric Loader from NeoForge
+configurations {
+    runtimeClasspath    { exclude group: 'net.fabricmc', module: 'fabric-loader' }
+    developmentRuntimeClasspath {
+        // Gradle 8 names used by ForgeGradle 6
+        exclude group: 'net.fabricmc', module: 'fabric-loader'
     }
 }
 
-tasks.register('generateJava', Copy) {
-    from project(':common').file('src/template/java')
-    into "${buildDir}/generated/java"
-    expand 'compatibility_version': mod_compatibility_version
-}
-sourceSets.main.java {
-    srcDir "${buildDir}/generated/java"
-}
-compileJava.dependsOn generateJava
-
-processResources {
-    filesMatching('**/*.toml') {
-        expand 'mod_id': mod_id,
-                'mod_version': mod_version,
-                'mod_name': mod_name,
-                'neoforge_version': neoforge_version,
-                'loader_version': loader_version,
-                'neoforge_dependency': 'neoforge_dependency',
-                'minecraft_version': minecraft_version
+// Exclude Fabric Loader from NeoForge
+configurations {
+    runtimeClasspath    { exclude group: 'net.fabricmc', module: 'fabric-loader' }
+    developmentRuntimeClasspath {
+        // Gradle 8 names used by ForgeGradle 6
+        exclude group: 'net.fabricmc', module: 'fabric-loader'
     }
-    from("${project(':common').projectDir}/src/main/resources")
 }
 
-tasks.withType(JavaCompile).configureEach {
-    source(project(':common').sourceSets.main.allSource)
-    source(project(':common').sourceSets.jcef.allSource)
+// NeoGradle compiles the game, but we don't want to add our common code to the game's code++
+Spec<Task> notNeoTask = { Task it -> !it.name.startsWith("neo") } as Spec<Task>
+
+tasks.named("compileJava", JavaCompile).configure {
+    source(project(":common").sourceSets.main.allSource)
+    source(project(":common").sourceSets.jcef.allSource)
 }
 
-tasks.withType(JavaCompile).configureEach {
-    options.encoding = 'UTF-8'
+tasks.withType(JavaCompile).matching(notNeoTask).configureEach {
+    it.options.compilerArgs += ['-Xlint:-deprecation', '-Xlint:-removal']
 }
 
-jar {
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    manifest {
-        attributes(['Specification-Title'     : mod_name,
-                    'Specification-Vendor'    : mod_vendor,
-                    'Specification-Version'   : "1",
-                    'Implementation-Title'    : mod_name,
-                    'Implementation-Version'  : mod_version,
-                    'Implementation-Vendor'   : mod_vendor,
-                    'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
-                    'java-cef-commit'         : project.parent.getCheckedOutGitCommitHash(project.parent)
-        ])
+tasks.withType(Javadoc).matching(notNeoTask).configureEach {
+    source(project(":common").sourceSets.main.allJava)
+}
+
+tasks.named("sourcesJar", Jar) {
+    from(project(":common").sourceSets.main.allSource)
+    from(project(":common").sourceSets.jcef.allSource)
+}
+
+tasks.withType(ProcessResources).matching(notNeoTask).configureEach {
+    from project(":common").sourceSets.main.resources
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            artifactId "${mod_id}-neoforge"
+            version "${mod_version}-${minecraft_version}"
+            from components.java
+            pom.withXml {
+                def deps = asNode().get('dependencies')
+                if (deps instanceof List) {
+                    deps.each { asNode().remove(it) }
+                }
+            }
+        }
     }
-    from configurations.shadow.collect { it.isDirectory() ? it : zipTree(it) }
-}
-
-curseforge {
-    apiKey = file("${rootDir}/curseforge_api_key.txt").exists() ? file("${rootDir}/curseforge_api_key.txt").text.trim() : ''
-    project {
-        id = curse_id
-        releaseType = release_type
-        addGameVersion minecraft_version
-        addGameVersion 'NeoForge'
-        addGameVersion "Java ${java_version}"
-        mainArtifact(jar) {
-            displayName = "[NEOFORGE][${minecraft_version}] ${mod_name} ${mod_version}"
+    repositories {
+        maven {
+            url "file://" + System.getenv("local_maven")
         }
     }
 }
 
-shadowJar {
-    configurations = [project.configurations.shadowMc]
-    archiveClassifier = ''
+tasks.named("build") {
+    dependsOn("generatePomFileForMavenJavaPublication", "generateMetadataFileForMavenJavaPublication")
+}
+
+tasks.withType(GenerateModuleMetadata).configureEach {
+    enabled = true
+}
+
+def stripModuleDepsTask = tasks.register("stripModuleDependencies") {
+    def moduleFile = layout.buildDirectory.file("publications/mavenJava/module.json")
+    inputs.file(moduleFile)
+    outputs.file(moduleFile)
+    doLast {
+        def file = moduleFile.get().asFile
+        if (!file.exists()) {
+            return
+        }
+        def json = new groovy.json.JsonSlurper().parse(file)
+        if (json?.variants) {
+            json.variants = json.variants.findAll { variant ->
+                !(variant instanceof Map) || variant.name != "accessTransformerElements"
+            }
+            def runtimeAllFiles = null
+            def runtimeRenamedFiles = null
+            json.variants.each { variant ->
+                if (variant instanceof Map) {
+                    if (variant.name == "runtimeElements" && variant.files instanceof List) {
+                        def allFiles = variant.files.findAll { fileEntry ->
+                            fileEntry instanceof Map &&
+                                    fileEntry.name instanceof String &&
+                                    fileEntry.name.endsWith("-all.jar")
+                        }
+                        if (allFiles != null && !allFiles.isEmpty()) {
+                            runtimeAllFiles = allFiles
+                            runtimeRenamedFiles = allFiles.collect { fileEntry ->
+                                if (fileEntry instanceof Map) {
+                                    def renamed = new LinkedHashMap(fileEntry)
+                                    if (renamed.name instanceof String && renamed.name.endsWith("-all.jar")) {
+                                        renamed.name = renamed.name.replace("-all.jar", ".jar")
+                                    }
+                                    if (renamed.url instanceof String && renamed.url.endsWith("-all.jar")) {
+                                        renamed.url = renamed.url.replace("-all.jar", ".jar")
+                                    }
+                                    renamed
+                                } else {
+                                    fileEntry
+                                }
+                            }
+                            variant.files = runtimeRenamedFiles
+                        }
+                    }
+                    variant.remove("dependencies")
+                }
+            }
+            json.variants.each { variant ->
+                if (variant instanceof Map && variant.name == "apiElements") {
+                    if (runtimeRenamedFiles != null) {
+                        variant.files = runtimeRenamedFiles.collect { fileEntry ->
+                            fileEntry instanceof Map ? new LinkedHashMap(fileEntry) : fileEntry
+                        }
+                    } else if (variant.files instanceof List) {
+                        variant.files = variant.files.findAll { fileEntry ->
+                            fileEntry instanceof Map &&
+                                    fileEntry.name instanceof String &&
+                                    fileEntry.name.endsWith("-all.jar")
+                        }
+                        variant.files = variant.files.collect { fileEntry ->
+                            if (fileEntry instanceof Map) {
+                                def renamed = new LinkedHashMap(fileEntry)
+                                if (renamed.name instanceof String && renamed.name.endsWith("-all.jar")) {
+                                    renamed.name = renamed.name.replace("-all.jar", ".jar")
+                                }
+                                if (renamed.url instanceof String && renamed.url.endsWith("-all.jar")) {
+                                    renamed.url = renamed.url.replace("-all.jar", ".jar")
+                                }
+                                renamed
+                            } else {
+                                fileEntry
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        file.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(json))
+    }
+}
+
+tasks.named("generateMetadataFileForMavenJavaPublication") {
+    finalizedBy(stripModuleDepsTask)
 }

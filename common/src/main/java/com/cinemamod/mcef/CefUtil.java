@@ -20,35 +20,33 @@
 
 package com.cinemamod.mcef;
 
-import net.minecraft.client.Minecraft;
 import org.cef.CefApp;
 import org.cef.CefClient;
 import org.cef.CefSettings;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
+import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.Objects;
 import java.util.Set;
 
 /**
  * This class mostly just interacts with org.cef.* for internal use in {@link MCEF}
  */
 final class CefUtil {
+    private static final Logger LOGGER = LoggerFactory.getLogger("MCEF");
+
     private CefUtil() {
     }
 
     private static boolean init;
     private static CefApp cefAppInstance;
     private static CefClient cefClientInstance;
-
-    private static final Path CACHE_PATH = Minecraft.getInstance().gameDirectory
-            .toPath()
-            .resolve("mods")
-            .resolve("mcef-cache");
 
     private static void setUnixExecutable(File file) {
         Set<PosixFilePermission> perms = new HashSet<>();
@@ -59,7 +57,7 @@ final class CefUtil {
         try {
             Files.setPosixFilePermissions(file.toPath(), perms);
         } catch (IOException e) {
-            MCEF.getLogger().error("Failed to set " + file + " as executable.", e);
+            LOGGER.error("Failed to set " + file + " as executable.", e);
         }
     }
 
@@ -82,28 +80,39 @@ final class CefUtil {
             setUnixExecutable(jcefHelperRendererFile);
         }
 
-        String[] cefSwitches = new String[]{
-                "--autoplay-policy=no-user-gesture-required",
-                "--disable-web-security",
-                "--enable-widevine-cdm" // https://canary.discord.com/channels/985588552735809696/992495232035868682/1151704612924039218
-                // TODO: should probably make this configurable
-                //       based off this page: https://magpcss.org/ceforum/viewtopic.php?f=6&t=11672
-                //       it seems the solution to the white screen is to add the "--disable-gpu" switch
-                //       but that shouldn't be done on all devices, so either we need to figure out a pattern and setup code to add the switch based off that, or add it as a config, if that is the case
-        };
+        MCEFSettings settings = MCEF.getSettings();
+        ArrayList<String> cefSwitchesList = new ArrayList<>();
+        cefSwitchesList.add("--autoplay-policy=no-user-gesture-required");
+        if (settings.isDisableWebSecurity()) {
+            cefSwitchesList.add("--disable-web-security");
+        }
+        if (settings.isEnableWidevineCdm()) {
+            cefSwitchesList.add("--enable-widevine-cdm");
+        }
+        String[] cefSwitches = cefSwitchesList.toArray(String[]::new);
 
         if (!CefApp.startup(cefSwitches)) {
             return false;
         }
 
-        MCEFSettings settings = MCEF.getSettings();
-
         CefSettings cefSettings = new CefSettings();
         cefSettings.windowless_rendering_enabled = true;
-        if (settings.isUsingCache()) cefSettings.cache_path = CACHE_PATH.toAbsolutePath().toString(); // jcef wants an absolute path, so make sure it's absolute
+        if (settings.isUsingCache()) {
+            Path cachePath = resolvePersistentCefCachePath_MCEF().toAbsolutePath();
+            try {
+                Files.createDirectories(cachePath);
+                // jcef wants an absolute path, so make sure it's absolute.
+                cefSettings.cache_path = cachePath.toString();
+                cefSettings.persist_session_cookies = true;
+                LOGGER.info("Using persistent MCEF browser data directory: {}", cachePath);
+            } catch (IOException e) {
+                LOGGER.warn("Failed to create persistent MCEF cache directory {}. Falling back to non-persistent browser data.", cachePath, e);
+            }
+        }
+        cefSettings.log_severity = settings.getNativeCefLogSeverity();
         cefSettings.background_color = cefSettings.new ColorType(0, 255, 255, 255);
         // Set the user agent if there's one defined in MCEFSettings
-        if (!Objects.equals(settings.getUserAgent(), "null")) {
+        if (settings.getUserAgent() != null) {
             cefSettings.user_agent = settings.getUserAgent();
         } else {
             // If there is no custom defined user agent, set a user agent product.
@@ -135,5 +144,39 @@ final class CefUtil {
 
     static CefClient getCefClient() {
         return cefClientInstance;
+    }
+
+    private static Path resolvePersistentCefCachePath_MCEF() {
+        return resolvePersistentDataRoot_MCEF().resolve("cef-cache");
+    }
+
+    private static Path resolvePersistentDataRoot_MCEF() {
+        MCEFPlatform platform = MCEFPlatform.getPlatform();
+        String userHome = System.getProperty("user.home", ".");
+
+        if (platform.isWindows()) {
+            String localAppData = System.getenv("LOCALAPPDATA");
+            if (localAppData != null && !localAppData.isBlank()) {
+                return Path.of(localAppData).resolve("MCEF");
+            }
+
+            String appData = System.getenv("APPDATA");
+            if (appData != null && !appData.isBlank()) {
+                return Path.of(appData).resolve("MCEF");
+            }
+
+            return Path.of(userHome, "AppData", "Local", "MCEF");
+        }
+
+        if (platform.isMacOS()) {
+            return Path.of(userHome, "Library", "Application Support", "MCEF");
+        }
+
+        String xdgDataHome = System.getenv("XDG_DATA_HOME");
+        if (xdgDataHome != null && !xdgDataHome.isBlank()) {
+            return Path.of(xdgDataHome).resolve("mcef");
+        }
+
+        return Path.of(userHome, ".local", "share", "mcef");
     }
 }

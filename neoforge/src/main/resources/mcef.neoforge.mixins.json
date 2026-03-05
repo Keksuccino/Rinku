@@ -1,15 +1,12 @@
 {
   "required": true,
   "minVersion": "0.8",
-  "package": "com.cinemamod.mcef.mixins",
+  "package": "com.cinemamod.mcef.mixins.neoforge",
   "compatibilityLevel": "JAVA_17",
   "refmap": "mcef.refmap.json",
   "mixins": [
   ],
   "client": [
-    "MixinClientPackSource",
-    "MixinMinecraft",
-    "MixinGameRenderer"
   ],
   "injectors": {
     "defaultRequire": 1
