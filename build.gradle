@@ -5,7 +5,7 @@ plugins {
 }
 
 def getJcefRepoUrl(Project project) {
-    def defaultUrl = "https://github.com/CinemaMod/java-cef.git"
+    def defaultUrl = "https://github.com/Keksuccino/java-cef.git"
     def modulesFile = project.file('.gitmodules')
     if (!modulesFile.exists()) {
         return defaultUrl
@@ -25,6 +25,27 @@ def getJcefRepoUrl(Project project) {
     return defaultUrl
 }
 
+def hasSubmoduleDeclaration(Project project, String submodulePath) {
+    def modulesFile = project.file('.gitmodules')
+    if (!modulesFile.exists()) {
+        return false
+    }
+    for (String rawLine : modulesFile.readLines()) {
+        def line = rawLine.trim()
+        if (line.startsWith('path =')) {
+            def declaredPath = line.substring('path ='.length()).trim()
+            if (declaredPath == submodulePath) {
+                return true
+            }
+        }
+    }
+    return false
+}
+
+def isGitCheckout(Project project) {
+    return project.file('.git').exists()
+}
+
 def runGit(Project project, List<String> args, boolean failOnError = true) {
     def command = ['git'] + args
     def process = new ProcessBuilder(command)
@@ -40,11 +61,36 @@ def runGit(Project project, List<String> args, boolean failOnError = true) {
 }
 
 def isTrackedSubmodule(Project project, String submodulePath) {
+    def submoduleGitMetadata = new File(project.file(submodulePath), '.git')
+    // Initialized submodules have a `.git` file that points into `.git/modules/...`.
+    if (submoduleGitMetadata.isFile()) {
+        def pointer = submoduleGitMetadata.text.trim()
+        if (pointer.startsWith('gitdir:')) {
+            return true
+        }
+    }
+
     def result = runGit(project, ['ls-files', '--stage', '--', submodulePath], false)
     if (result.exitValue != 0) {
         return false
     }
     return result.output.readLines().any { it.startsWith('160000 ') }
+}
+
+def ensureTrackedSubmodule(Project project, String submodulePath, String repoUrl) {
+    if (!isGitCheckout(project)) {
+        return false
+    }
+    if (!hasSubmoduleDeclaration(project, submodulePath)) {
+        return false
+    }
+    if (isTrackedSubmodule(project, submodulePath)) {
+        return true
+    }
+
+    logger.lifecycle("${submodulePath} is declared in .gitmodules but not tracked as a git submodule in this checkout; registering it.")
+    runGit(project, ['submodule', 'add', '--force', repoUrl, submodulePath])
+    return true
 }
 
 tasks.register('syncJcef') {
@@ -53,9 +99,12 @@ tasks.register('syncJcef') {
         def jcefDir = rootProject.file(jcefPath)
         def repoUrl = getJcefRepoUrl(rootProject)
         def jcefGitMetadata = new File(jcefDir, '.git')
-        def trackedAsSubmodule = isTrackedSubmodule(rootProject, jcefPath)
+        def useSubmoduleFlow = ensureTrackedSubmodule(rootProject, jcefPath, repoUrl)
+        if (!useSubmoduleFlow && isGitCheckout(rootProject)) {
+            useSubmoduleFlow = isTrackedSubmodule(rootProject, jcefPath)
+        }
 
-        if (trackedAsSubmodule) {
+        if (useSubmoduleFlow) {
             runGit(rootProject, ['submodule', 'sync', '--', jcefPath])
             return
         }
@@ -74,14 +123,17 @@ tasks.register('cloneJcef') {
         def jcefDir = rootProject.file(jcefPath)
         def repoUrl = getJcefRepoUrl(rootProject)
         def jcefGitMetadata = new File(jcefDir, '.git')
-        def trackedAsSubmodule = isTrackedSubmodule(rootProject, jcefPath)
+        def useSubmoduleFlow = ensureTrackedSubmodule(rootProject, jcefPath, repoUrl)
+        if (!useSubmoduleFlow && isGitCheckout(rootProject)) {
+            useSubmoduleFlow = isTrackedSubmodule(rootProject, jcefPath)
+        }
 
-        if (jcefGitMetadata.exists()) {
+        if (useSubmoduleFlow) {
+            runGit(rootProject, ['submodule', 'update', '--init', '--recursive', jcefPath])
             return
         }
 
-        if (trackedAsSubmodule) {
-            runGit(rootProject, ['submodule', 'update', '--init', '--recursive', jcefPath])
+        if (jcefGitMetadata.exists()) {
             return
         }
 
