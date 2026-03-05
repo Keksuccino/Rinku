@@ -9,7 +9,7 @@ import net.neoforged.neoforge.common.NeoForge;
 
 public class MCEFExampleMod {
 
-    public static final KeyMapping KEY_MAPPING = new KeyMapping("Open Browser", InputConstants.KEY_F12, KeyMapping.Category.MISC);
+    public static final KeyMapping KEY_MAPPING = new KeyMapping("Open Browser", InputConstants.KEY_F12, KeyMapping.CATEGORY_MISC);
 
     public MCEFExampleMod() {
         NeoForge.EVENT_BUS.addListener(this::onTick);
