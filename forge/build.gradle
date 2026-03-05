@@ -34,6 +34,7 @@ def defaultParchmentMappingsVersion = parchment_mc_version == minecraft_version
 def forgeMappingsVersion = providers.gradleProperty("forge_mappings_version")
         .orElse(forgeMappingsChannel == "parchment" ? defaultParchmentMappingsVersion : "${minecraft_version}")
         .get()
+def javaCefCommit = (rootProject.ext.has("javaCefCommitHash") ? rootProject.ext.javaCefCommitHash : "").toString().trim()
 
 minecraft {
 
@@ -55,6 +56,9 @@ minecraft {
             taskName 'Client'
             property 'mixin.env.remapRefMap', 'true'
             property 'mixin.env.refMapRemappingFile', "${projectDir}/build/createSrgToMcp/output.srg"
+            if (!javaCefCommit.isEmpty()) {
+                property 'mcef.java.cef.commit', javaCefCommit
+            }
             mods {
                 modClientRun {
                     source sourceSets.main
@@ -67,6 +71,9 @@ minecraft {
             taskName 'Server'
             property 'mixin.env.remapRefMap', 'true'
             property 'mixin.env.refMapRemappingFile', "${projectDir}/build/createSrgToMcp/output.srg"
+            if (!javaCefCommit.isEmpty()) {
+                property 'mcef.java.cef.commit', javaCefCommit
+            }
             mods {
                 modServerRun {
                     source sourceSets.main
@@ -125,6 +132,7 @@ processResources {
     from(project(":common").sourceSets.main.resources) {
         exclude "${mod_id}.refmap.json"
     }
+    from(layout.buildDirectory.file("tmp/compileJava/${mod_id}.refmap.json"))
 }
 
 jar.finalizedBy('reobfJar')

@@ -18,19 +18,16 @@ logoFile="${mod_id}_logo_128x128.png"
 # The description text for the mod (multi line!) (#mandatory)
 description='''${mod_description}'''
 
-[[accessTransformers]]
-file="META-INF/accesstransformer.cfg"
-
 [[dependencies.${mod_id}]]
 modId="forge"
-type="required"
+mandatory=true
 versionRange="[${forge_version},)"
 ordering="NONE"
 side="BOTH"
 
 [[dependencies.${mod_id}]]
 modId="minecraft"
-type="required"
+mandatory=true
 versionRange="[${minecraft_version},)"
 ordering="NONE"
 side="BOTH"

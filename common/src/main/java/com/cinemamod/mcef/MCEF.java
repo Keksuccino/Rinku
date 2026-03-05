@@ -446,15 +446,44 @@ public final class MCEF {
         Path currentDir = Path.of(System.getProperty("user.dir", ".")).toAbsolutePath();
         Path probeDir = currentDir;
         for (int i = 0; i < 8 && probeDir != null; i++) {
-            Path gitModuleHeadPath = probeDir.resolve(".git/modules/common/java-cef/HEAD");
-            String commit = readGitHeadCommit_MCEF(gitModuleHeadPath);
-            if (commit != null) {
-                LOGGER.info("Resolved java-cef commit from {}", gitModuleHeadPath);
-                return commit;
+            for (Path headPath : getJavaCefGitHeadCandidates_MCEF(probeDir)) {
+                String commit = readGitHeadCommit_MCEF(headPath);
+                if (commit != null) {
+                    LOGGER.info("Resolved java-cef commit from {}", headPath);
+                    return commit;
+                }
             }
             probeDir = probeDir.getParent();
         }
         return null;
+    }
+
+    private static List<Path> getJavaCefGitHeadCandidates_MCEF(Path probeDir) {
+        List<Path> headCandidates = new ArrayList<>();
+        headCandidates.add(probeDir.resolve(".git/modules/common/java-cef/HEAD"));
+
+        Path jcefGitPath = probeDir.resolve("common/java-cef/.git");
+        if (Files.isDirectory(jcefGitPath)) {
+            headCandidates.add(jcefGitPath.resolve("HEAD"));
+            return headCandidates;
+        }
+        if (!Files.isRegularFile(jcefGitPath)) {
+            return headCandidates;
+        }
+
+        try {
+            String pointer = Files.readString(jcefGitPath, StandardCharsets.UTF_8).trim();
+            if (pointer.startsWith("gitdir:")) {
+                String gitDirLocation = pointer.substring("gitdir:".length()).trim();
+                if (!gitDirLocation.isEmpty()) {
+                    headCandidates.add(jcefGitPath.getParent().resolve(gitDirLocation).normalize().resolve("HEAD"));
+                }
+            }
+        } catch (IOException e) {
+            LOGGER.warn("Failed to read {}", jcefGitPath, e);
+        }
+
+        return headCandidates;
     }
 
     private static String readGitHeadCommit_MCEF(Path headPath) {

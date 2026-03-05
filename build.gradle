@@ -192,6 +192,8 @@ def getCheckedOutGitCommitHash(Project mcefParent) {
     return ""
 }
 
+ext.javaCefCommitHash = getCheckedOutGitCommitHash(rootProject)
+
 subprojects {
 
     apply plugin: 'java'
