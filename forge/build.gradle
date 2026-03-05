@@ -128,11 +128,7 @@ tasks.named("sourcesJar", Jar) {
 }
 
 processResources {
-    dependsOn(tasks.named("compileJava"))
-    from(project(":common").sourceSets.main.resources) {
-        exclude "${mod_id}.refmap.json"
-    }
-    from(layout.buildDirectory.file("tmp/compileJava/${mod_id}.refmap.json"))
+    from(project(":common").sourceSets.main.resources)
 }
 
 jar.finalizedBy('reobfJar')
