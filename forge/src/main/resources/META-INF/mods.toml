@@ -18,11 +18,6 @@ logoFile="${mod_id}_logo_128x128.png"
 # The description text for the mod (multi line!) (#mandatory)
 description='''${mod_description}'''
 
-[[mixins]]
-config = "${mod_id}.mixins.json"
-[[mixins]]
-config = "${mod_id}.forge.mixins.json"
-
 [[accessTransformers]]
 file="META-INF/accesstransformer.cfg"
 

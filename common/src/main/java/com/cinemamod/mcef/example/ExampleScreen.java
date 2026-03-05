@@ -338,8 +338,8 @@ public class ExampleScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        boolean handled = super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollY) {
+        boolean handled = super.mouseScrolled(mouseX, mouseY, scrollY);
         if (handled) {
             return true;
         }

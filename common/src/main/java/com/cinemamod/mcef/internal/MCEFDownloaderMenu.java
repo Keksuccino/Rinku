@@ -26,6 +26,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import com.mojang.blaze3d.vertex.PoseStack;
+import org.jetbrains.annotations.NotNull;
 
 public class MCEFDownloaderMenu extends Screen {
     private final Screen menu;
@@ -36,14 +37,14 @@ public class MCEFDownloaderMenu extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    public void render(@NotNull GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         double cx = width / 2d;
         double cy = height / 2d;
 
         double progressBarHeight = 14;
         double progressBarWidth = width / 3d;
 
-        this.renderBackground(graphics, mouseX, mouseY, partialTick);
+        this.renderBackground(graphics);
 
         PoseStack matrix = graphics.pose();
 

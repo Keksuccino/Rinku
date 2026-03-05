@@ -26,7 +26,7 @@ public class MCEFRenderer {
         this.transparent = transparent;
         // Generate a unique ResourceLocation for this renderer
         String uniqueId = UUID.randomUUID().toString().toLowerCase().replace("-", "");
-        this.textureResourceLocation = ResourceLocation.fromNamespaceAndPath("mcef", "browser_" + uniqueId);
+        this.textureResourceLocation = new ResourceLocation("mcef", "browser_" + uniqueId);
     }
 
     public void initialize() {
