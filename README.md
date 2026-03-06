@@ -30,7 +30,7 @@ repositories {
 }
 
 dependencies {
-    modImplementation "de.keksuccino:mcef-fabric:2.2.0-1.20.1"
+    modImplementation "de.keksuccino:mcef-fabric:2.2.0-1.19.2"
 }
 ```
 
@@ -42,7 +42,7 @@ repositories {
 }
 
 dependencies {
-    implementation fg.deobf("de.keksuccino:mcef-forge:2.2.0-1.20.1")
+    implementation fg.deobf("de.keksuccino:mcef-forge:2.2.0-1.19.2")
 }
 ```
 
