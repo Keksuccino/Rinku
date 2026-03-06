@@ -24,3 +24,5 @@
 /buildSrc/build/
 /buildSrc/.gradle/
 /forge/build/
+/forge/config.txt
+/forge/launcher.exe
