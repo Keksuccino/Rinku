@@ -30,13 +30,11 @@ repositories {
 }
 
 dependencies {
-    modImplementation "de.keksuccino:mcef-fabric:2.2.0-1.21.1"
+    modImplementation "de.keksuccino:mcef-fabric:2.2.0-1.20.1"
 }
 ```
 
-Replace the MCEF and Minecraft version as required. `modImplementation` makes MCEF available in dev.
-
-### NeoForge
+### Forge
 
 ```groovy
 repositories {
@@ -44,11 +42,9 @@ repositories {
 }
 
 dependencies {
-    implementation "de.keksuccino:mcef-neoforge:2.2.0-1.21.1"
+    implementation fg.deobf("de.keksuccino:mcef-forge:2.2.0-1.20.1")
 }
 ```
-
-NeoForge ships deobfuscated jars by default, so the dependency can be declared with a plain `implementation`. Replace the MCEF and Minecraft version as required.
 
 ## Building & Modifying MCEF
 

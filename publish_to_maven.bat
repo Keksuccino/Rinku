@@ -39,9 +39,9 @@ if not defined MOD_ID (
 
 set "VERSION=%MOD_VERSION%-%MINECRAFT_VERSION%"
 set "FABRIC_LIB_DIR=%PROJECT_DIR%fabric\build\libs"
-set "NEOFORGE_LIB_DIR=%PROJECT_DIR%neoforge\build\libs"
+set "FORGE_LIB_DIR=%PROJECT_DIR%forge\build\libs"
 set "FABRIC_BASE=%MOD_ID%-1.0.0"
-set "NEOFORGE_BASE=%MOD_ID%-1.0.0"
+set "FORGE_BASE=%MOD_ID%-1.0.0"
 set "GRADLEW=%PROJECT_DIR%gradlew.bat"
 
 if not exist "%GRADLEW%" (
@@ -50,7 +50,7 @@ if not exist "%GRADLEW%" (
 )
 
 pushd "%PROJECT_DIR%"
-call "%GRADLEW%" :fabric:generatePomFileForMavenJavaPublication :fabric:generateMetadataFileForMavenJavaPublication :neoforge:generatePomFileForMavenJavaPublication :neoforge:generateMetadataFileForMavenJavaPublication
+call "%GRADLEW%" :fabric:generatePomFileForMavenJavaPublication :fabric:generateMetadataFileForMavenJavaPublication :forge:generatePomFileForMavenJavaPublication :forge:generateMetadataFileForMavenJavaPublication
 if errorlevel 1 (
     popd
     goto :gradlefail
@@ -64,9 +64,9 @@ for %%F in ("%FABRIC_LIB_DIR%\%FABRIC_BASE%.jar" "%FABRIC_LIB_DIR%\%FABRIC_BASE%
     )
 )
 
-for %%F in ("%NEOFORGE_LIB_DIR%\%NEOFORGE_BASE%-all.jar" "%NEOFORGE_LIB_DIR%\%NEOFORGE_BASE%-sources.jar" "%PROJECT_DIR%neoforge\build\publications\mavenJava\pom-default.xml") do (
+for %%F in ("%FORGE_LIB_DIR%\%FORGE_BASE%-all.jar" "%FORGE_LIB_DIR%\%FORGE_BASE%-sources.jar" "%PROJECT_DIR%forge\build\publications\mavenJava\pom-default.xml") do (
     if not exist "%%~fF" (
-        echo Missing NeoForge artifact: %%~fF
+        echo Missing Forge artifact: %%~fF
         goto :finish
     )
 )
@@ -109,28 +109,28 @@ copy /y "%FABRIC_LIB_DIR%\%FABRIC_BASE%-sources.jar" "%FABRIC_TARGET_DIR%\%FABRI
 copy /y "%FABRIC_POM_SRC%" "%FABRIC_TARGET_DIR%\%FABRIC_FILENAME_BASE%.pom" >nul || goto :copyfail
 copy /y "%FABRIC_MODULE_SRC%" "%FABRIC_TARGET_DIR%\%FABRIC_FILENAME_BASE%.module" >nul || goto :copyfail
 
-set "NEOFORGE_ARTIFACT_ID=%MOD_ID%-neoforge"
-set "NEOFORGE_FILENAME_BASE=%NEOFORGE_ARTIFACT_ID%-%VERSION%"
-set "NEOFORGE_TARGET_DIR=%REPO_DIR%\maven\de\keksuccino\%NEOFORGE_ARTIFACT_ID%\%VERSION%"
-set "NEOFORGE_MODULE_SRC=%PROJECT_DIR%neoforge\build\publications\mavenJava\module.json"
-set "NEOFORGE_POM_SRC=%PROJECT_DIR%neoforge\build\publications\mavenJava\pom-default.xml"
-if not exist "%NEOFORGE_MODULE_SRC%" (
-    echo Missing NeoForge metadata file: %NEOFORGE_MODULE_SRC%
+set "FORGE_ARTIFACT_ID=%MOD_ID%-forge"
+set "FORGE_FILENAME_BASE=%FORGE_ARTIFACT_ID%-%VERSION%"
+set "FORGE_TARGET_DIR=%REPO_DIR%\maven\de\keksuccino\%FORGE_ARTIFACT_ID%\%VERSION%"
+set "FORGE_MODULE_SRC=%PROJECT_DIR%forge\build\publications\mavenJava\module.json"
+set "FORGE_POM_SRC=%PROJECT_DIR%forge\build\publications\mavenJava\pom-default.xml"
+if not exist "%FORGE_MODULE_SRC%" (
+    echo Missing Forge metadata file: %FORGE_MODULE_SRC%
     goto :finish
 )
-if not exist "%NEOFORGE_POM_SRC%" (
-    echo Missing NeoForge pom file: %NEOFORGE_POM_SRC%
+if not exist "%FORGE_POM_SRC%" (
+    echo Missing Forge pom file: %FORGE_POM_SRC%
     goto :finish
 )
-call :stripModuleDependencies "%NEOFORGE_MODULE_SRC%" || goto :modulecleanfail
-if not exist "%NEOFORGE_TARGET_DIR%" mkdir "%NEOFORGE_TARGET_DIR%"
-copy /y "%NEOFORGE_LIB_DIR%\%NEOFORGE_BASE%-all.jar" "%NEOFORGE_TARGET_DIR%\%NEOFORGE_FILENAME_BASE%.jar" >nul || goto :copyfail
-copy /y "%NEOFORGE_LIB_DIR%\%NEOFORGE_BASE%-sources.jar" "%NEOFORGE_TARGET_DIR%\%NEOFORGE_FILENAME_BASE%-sources.jar" >nul || goto :copyfail
-copy /y "%NEOFORGE_POM_SRC%" "%NEOFORGE_TARGET_DIR%\%NEOFORGE_FILENAME_BASE%.pom" >nul || goto :copyfail
-copy /y "%NEOFORGE_MODULE_SRC%" "%NEOFORGE_TARGET_DIR%\%NEOFORGE_FILENAME_BASE%.module" >nul || goto :copyfail
+call :stripModuleDependencies "%FORGE_MODULE_SRC%" || goto :modulecleanfail
+if not exist "%FORGE_TARGET_DIR%" mkdir "%FORGE_TARGET_DIR%"
+copy /y "%FORGE_LIB_DIR%\%FORGE_BASE%-all.jar" "%FORGE_TARGET_DIR%\%FORGE_FILENAME_BASE%.jar" >nul || goto :copyfail
+copy /y "%FORGE_LIB_DIR%\%FORGE_BASE%-sources.jar" "%FORGE_TARGET_DIR%\%FORGE_FILENAME_BASE%-sources.jar" >nul || goto :copyfail
+copy /y "%FORGE_POM_SRC%" "%FORGE_TARGET_DIR%\%FORGE_FILENAME_BASE%.pom" >nul || goto :copyfail
+copy /y "%FORGE_MODULE_SRC%" "%FORGE_TARGET_DIR%\%FORGE_FILENAME_BASE%.module" >nul || goto :copyfail
 
 pushd "%REPO_DIR%"
-git add "maven/de/keksuccino/%FABRIC_ARTIFACT_ID%/%VERSION%" "maven/de/keksuccino/%NEOFORGE_ARTIFACT_ID%/%VERSION%" || goto :gitfail
+git add "maven/de/keksuccino/%FABRIC_ARTIFACT_ID%/%VERSION%" "maven/de/keksuccino/%FORGE_ARTIFACT_ID%/%VERSION%" || goto :gitfail
 set "CHANGES="
 for /f %%S in ('git status --porcelain') do (
     set "CHANGES=1"
