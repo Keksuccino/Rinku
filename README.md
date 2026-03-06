@@ -50,9 +50,6 @@ dependencies {
 
 After cloning this repo, you will need to clone the java-cef git submodule. There is a gradle task for this: `./gradlew cloneJcef`.
 
-To run the Fabric client: `./gradlew fabricClient`
-To run the NeoForge client: `./gradlew neoforgeClient`
-
 In-game, there is a demo browser if you press F12 after you're loaded into a world (the demo browser only exists when you're running from a development environment).
 
 ## Clearing MCEF Cache
