@@ -2,8 +2,9 @@ package com.cinemamod.mcef.example;
 
 import com.cinemamod.mcef.MCEF;
 import com.cinemamod.mcef.MCEFBrowser;
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -86,23 +87,17 @@ public class ExampleScreen extends Screen {
         int navY = FRAME_MARGIN;
 
         backButton = addRenderableWidget(
-                Button.builder(Component.literal("<"), (button) -> browser.goBack())
-                        .bounds(navX, navY, NAV_BUTTON_WIDTH, NAV_BAR_HEIGHT)
-                        .build()
+                new Button(navX, navY, NAV_BUTTON_WIDTH, NAV_BAR_HEIGHT, Component.literal("<"), (button) -> browser.goBack())
         );
         navX += NAV_BUTTON_WIDTH + NAV_SPACING;
 
         forwardButton = addRenderableWidget(
-                Button.builder(Component.literal(">"), (button) -> browser.goForward())
-                        .bounds(navX, navY, NAV_BUTTON_WIDTH, NAV_BAR_HEIGHT)
-                        .build()
+                new Button(navX, navY, NAV_BUTTON_WIDTH, NAV_BAR_HEIGHT, Component.literal(">"), (button) -> browser.goForward())
         );
         navX += NAV_BUTTON_WIDTH + NAV_SPACING;
 
         reloadButton = addRenderableWidget(
-                Button.builder(Component.literal("R"), (button) -> browser.reload())
-                        .bounds(navX, navY, NAV_BUTTON_WIDTH, NAV_BAR_HEIGHT)
-                        .build()
+                new Button(navX, navY, NAV_BUTTON_WIDTH, NAV_BAR_HEIGHT, Component.literal("R"), (button) -> browser.reload())
         );
         navX += NAV_BUTTON_WIDTH + NAV_SPACING;
 
@@ -161,13 +156,18 @@ public class ExampleScreen extends Screen {
             MCEF.getClient().removeDisplayHandler(addressBarDisplayHandler);
         }
         addressBarDisplayHandler = null;
-        browser.close();
+        if (browser != null) {
+            browser.close();
+        }
         super.onClose();
     }
 
     @Override
     public void tick() {
         super.tick();
+        if (urlBox != null) {
+            urlBox.tick();
+        }
         refreshNavigationState();
     }
 
@@ -195,7 +195,7 @@ public class ExampleScreen extends Screen {
     }
 
     private void navigateFromUrlField() {
-        if (urlBox == null) {
+        if (urlBox == null || browser == null) {
             return;
         }
 
@@ -211,22 +211,23 @@ public class ExampleScreen extends Screen {
         String normalizedUrl = normalizeUrl(input);
         urlBox.setValue(normalizedUrl);
         browser.loadURL(normalizedUrl);
+        clearNavigationFocus_MCEF();
         browser.setFocus(true);
     }
 
     private void clearNavigationFocus_MCEF() {
-        setFocused(null);
-        if (backButton != null) {
-            backButton.setFocused(false);
+        magicalSpecialHackyFocus(null);
+        if (backButton != null && backButton.isFocused()) {
+            backButton.changeFocus(false);
         }
-        if (forwardButton != null) {
-            forwardButton.setFocused(false);
+        if (forwardButton != null && forwardButton.isFocused()) {
+            forwardButton.changeFocus(false);
         }
-        if (reloadButton != null) {
-            reloadButton.setFocused(false);
+        if (reloadButton != null && reloadButton.isFocused()) {
+            reloadButton.changeFocus(false);
         }
         if (urlBox != null) {
-            urlBox.setFocused(false);
+            urlBox.setFocus(false);
         }
     }
 
@@ -238,19 +239,18 @@ public class ExampleScreen extends Screen {
     }
 
     @Override
-    public void render(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY, float partial) {
-
-        super.render(guiGraphics, mouseX, mouseY, partial);
-        renderLoadingIndicator(guiGraphics);
+    public void render(@NotNull PoseStack poseStack, int mouseX, int mouseY, float partial) {
+        super.render(poseStack, mouseX, mouseY, partial);
+        renderLoadingIndicator(poseStack);
         
         // Check if the browser texture is ready for rendering
         if (browser != null && browser.isTextureReady()) {
-            renderBrowserTexture(guiGraphics);
+            renderBrowserTexture(poseStack);
         }
 
     }
     
-    private void renderBrowserTexture(GuiGraphics guiGraphics) {
+    private void renderBrowserTexture(PoseStack poseStack) {
 
         // Get the Identifier for the browser texture
         ResourceLocation textureLocation = browser.getTextureLocation();
@@ -260,30 +260,40 @@ public class ExampleScreen extends Screen {
 
         int frameRenderWidth = getBrowserWidth();
         int frameRenderHeight = getBrowserHeight();
-        guiGraphics.blit(
-                textureLocation,
+        int textureWidth = browser.getRenderer().getTextureWidth();
+        int textureHeight = browser.getRenderer().getTextureHeight();
+        if (textureWidth <= 0 || textureHeight <= 0) {
+            return;
+        }
+
+        RenderSystem.setShaderTexture(0, textureLocation);
+        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+        blit(
+                poseStack,
                 getBrowserX(),
                 getBrowserY(),
-                0.0F,
-                0.0F,
                 frameRenderWidth,
                 frameRenderHeight,
-                frameRenderWidth,
-                frameRenderHeight
+                0.0F,
+                0.0F,
+                textureWidth,
+                textureHeight,
+                textureWidth,
+                textureHeight
         );
 
     }
 
-    private void renderLoadingIndicator(GuiGraphics guiGraphics) {
+    private void renderLoadingIndicator(PoseStack poseStack) {
         if (browser == null || urlBox == null || !browser.isLoading()) {
             return;
         }
 
-        int barX = urlBox.getX();
-        int barY = urlBox.getY() + 1;
+        int barX = urlBox.x;
+        int barY = urlBox.y + 1;
         int barWidth = urlBox.getWidth();
         int barBottom = barY + LOADING_BAR_HEIGHT;
-        guiGraphics.fill(barX, barY, barX + barWidth, barBottom, LOADING_BAR_TRACK_COLOR);
+        fill(poseStack, barX, barY, barX + barWidth, barBottom, LOADING_BAR_TRACK_COLOR);
 
         int segmentWidth = Math.max(20, barWidth / 4);
         int travelRange = barWidth + segmentWidth;
@@ -291,7 +301,7 @@ public class ExampleScreen extends Screen {
         int segmentStart = Math.max(barX, barX + animatedOffset);
         int segmentEnd = Math.min(barX + barWidth, barX + animatedOffset + segmentWidth);
         if (segmentEnd > segmentStart) {
-            guiGraphics.fill(segmentStart, barY, segmentEnd, barBottom, LOADING_BAR_FILL_COLOR);
+            fill(poseStack, segmentStart, barY, segmentEnd, barBottom, LOADING_BAR_FILL_COLOR);
         }
     }
 
@@ -356,8 +366,6 @@ public class ExampleScreen extends Screen {
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         if (urlBox != null && urlBox.isFocused() && (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER)) {
             navigateFromUrlField();
-            setFocused(null);
-            browser.setFocus(true);
             return true;
         }
 
