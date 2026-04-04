@@ -12,6 +12,7 @@ base {
 
 dependencies {
     minecraft "com.mojang:minecraft:${minecraft_version}"
+    compileOnly "net.fabricmc:fabric-loader:${fabric_loader_version}"
     implementation group: 'com.google.code.findbugs', name: 'jsr305', version: '3.0.2'
     implementation group: 'org.ow2.asm', name: 'asm-tree', version: '9.7'
     annotationProcessor group: 'org.ow2.asm', name: 'asm-util', version: '9.7'

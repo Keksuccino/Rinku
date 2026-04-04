@@ -2,7 +2,7 @@ package com.cinemamod.mcef.example;
 
 import com.cinemamod.mcef.MCEF;
 import com.cinemamod.mcef.MCEFBrowser;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -225,9 +225,8 @@ public class ExampleScreen extends Screen {
     }
 
     @Override
-    public void render(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY, float partial) {
-
-        super.render(guiGraphics, mouseX, mouseY, partial);
+    public void extractRenderState(@NotNull GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY, float partial) {
+        super.extractRenderState(guiGraphics, mouseX, mouseY, partial);
         renderLoadingIndicator(guiGraphics);
         
         // Check if the browser texture is ready for rendering
@@ -237,7 +236,7 @@ public class ExampleScreen extends Screen {
 
     }
     
-    private void renderBrowserTexture(GuiGraphics guiGraphics) {
+    private void renderBrowserTexture(GuiGraphicsExtractor guiGraphics) {
 
         // Get the Identifier for the browser texture
         Identifier textureLocation = browser.getTextureIdentifier();
@@ -262,7 +261,7 @@ public class ExampleScreen extends Screen {
 
     }
 
-    private void renderLoadingIndicator(GuiGraphics guiGraphics) {
+    private void renderLoadingIndicator(GuiGraphicsExtractor guiGraphics) {
         if (browser == null || urlBox == null || !browser.isLoading()) {
             return;
         }

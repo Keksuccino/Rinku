@@ -22,7 +22,7 @@ package com.cinemamod.mcef.internal;
 
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.joml.Matrix3x2fStack;
@@ -36,7 +36,8 @@ public class MCEFDownloaderMenu extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+        super.extractRenderState(graphics, mouseX, mouseY, partialTick);
         double cx = width / 2d;
         double cy = height / 2d;
 
@@ -83,7 +84,7 @@ public class MCEFDownloaderMenu extends Screen {
         matrix.pushMatrix();
         matrix.translate((float) cx, (float) (cy - oSet));
         // draw menu name
-        graphics.drawString(this.font, this.title, (int) -(font.width(this.title) / 2d), 0, -1);
+        graphics.text(this.font, this.title, (int) -(font.width(this.title) / 2d), 0, -1);
         // draw other text
         int index = 0;
         for (String s : text) {
@@ -91,7 +92,7 @@ public class MCEFDownloaderMenu extends Screen {
                 matrix.translate(0.0F, font.lineHeight + 2.0F);
             }
             matrix.translate(0.0F, font.lineHeight + 2.0F);
-            graphics.drawString(this.font, s, (int) -(font.width(s) / 2d), 0, -1);
+            graphics.text(this.font, s, (int) -(font.width(s) / 2d), 0, -1);
             index++;
         }
         matrix.popMatrix();
