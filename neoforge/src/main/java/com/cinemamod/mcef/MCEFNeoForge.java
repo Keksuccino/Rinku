@@ -31,14 +31,14 @@ import net.neoforged.fml.loading.FMLEnvironment;
 public class MCEFNeoForge {
 
     public MCEFNeoForge(IEventBus modEventBus) {
+        if (!FMLEnvironment.isProduction()) {
+            new MCEFExampleMod(modEventBus);
+        }
         modEventBus.addListener(this::clientSetup);
         modEventBus.addListener(this::serverSetup);
     }
 
     private void clientSetup(final FMLClientSetupEvent event) {
-        if (!FMLEnvironment.isProduction()) {
-            new MCEFExampleMod();
-        }
     }
 
     private void serverSetup(final FMLDedicatedServerSetupEvent event) {

@@ -4,15 +4,22 @@ import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
+import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.common.NeoForge;
 
 public class MCEFExampleMod {
 
     public static final KeyMapping KEY_MAPPING = new KeyMapping("Open Browser", InputConstants.KEY_F12, KeyMapping.Category.MISC);
 
-    public MCEFExampleMod() {
+    public MCEFExampleMod(IEventBus modEventBus) {
+        modEventBus.addListener(this::registerKeyMappings);
         NeoForge.EVENT_BUS.addListener(this::onTick);
+    }
+
+    public void registerKeyMappings(RegisterKeyMappingsEvent event) {
+        event.register(KEY_MAPPING);
     }
 
     public void onTick(ClientTickEvent.Post event) {
