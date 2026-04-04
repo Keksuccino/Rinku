@@ -9,8 +9,8 @@ import net.minecraft.client.gui.screens.*;
 import net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen;
 import net.minecraft.client.gui.screens.multiplayer.SafetyScreen;
 import net.minecraft.client.gui.screens.packs.PackSelectionScreen;
+import net.minecraft.client.gui.screens.worldselection.AbstractGameRulesScreen;
 import net.minecraft.client.gui.screens.worldselection.CreateWorldScreen;
-import net.minecraft.client.gui.screens.worldselection.EditGameRulesScreen;
 import net.minecraft.client.gui.screens.worldselection.ExperimentsScreen;
 import net.minecraft.client.gui.screens.worldselection.SelectWorldScreen;
 import org.jetbrains.annotations.Nullable;
@@ -67,7 +67,7 @@ public abstract class MixinMinecraft {
                             screen instanceof SafetyScreen ||
                             screen instanceof JoinMultiplayerScreen ||
                             screen instanceof CreateWorldScreen ||
-                            screen instanceof EditGameRulesScreen ||
+                            screen instanceof AbstractGameRulesScreen ||
                             screen instanceof ExperimentsScreen ||
                             screen instanceof PackSelectionScreen ||
                             screen instanceof CreateFlatWorldScreen ||

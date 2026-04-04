@@ -4,6 +4,11 @@ plugins {
     id "org.jetbrains.gradle.plugin.idea-ext" version "1.3"
 }
 
+tasks.named("updateDaemonJvm") {
+    languageVersion = JavaLanguageVersion.of(providers.gradleProperty("java_version").get().toInteger())
+    toolchainPlatforms = []
+}
+
 def getJcefRepoUrl(Project project) {
     def defaultUrl = "https://github.com/CinemaMod/java-cef.git"
     def modulesFile = project.file('.gitmodules')
@@ -144,7 +149,7 @@ subprojects {
 
     apply plugin: 'java'
 
-    java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+    java.toolchain.languageVersion = JavaLanguageVersion.of(java_version.toInteger())
     java.withSourcesJar()
 //    java.withJavadocJar()
 
@@ -308,7 +313,7 @@ subprojects {
 
     tasks.withType(JavaCompile).configureEach {
         it.options.encoding = 'UTF-8'
-        it.options.getRelease().set(21)
+        it.options.getRelease().set(java_version.toInteger())
         it.options.compilerArgs += ['-Xlint:-deprecation', '-Xlint:-removal']
     }
 
@@ -322,6 +327,7 @@ subprojects {
                 "mod_license": mod_license,
                 "mod_authors": mod_authors,
                 "minecraft_version": minecraft_version,
+                "java_version": java_version,
                 "fabric_version": fabric_version,
                 "fabric_short_version": fabric_short_version,
                 "fabric_loader_version": fabric_loader_version,

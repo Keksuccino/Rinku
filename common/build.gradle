@@ -3,7 +3,7 @@ plugins {
     id 'java'
     id 'idea'
     id 'maven-publish'
-    id "fabric-loom" version "$fabric_loom_version"
+    id "net.fabricmc.fabric-loom" version "$fabric_loom_version"
 }
 
 base {
@@ -12,10 +12,6 @@ base {
 
 dependencies {
     minecraft "com.mojang:minecraft:${minecraft_version}"
-    mappings loom.layered() {
-        officialMojangMappings()
-        parchment("org.parchmentmc.data:parchment-${parchment_mc_version}:${parchment_version}@zip")
-    }
     implementation group: 'com.google.code.findbugs', name: 'jsr305', version: '3.0.2'
     implementation group: 'org.ow2.asm', name: 'asm-tree', version: '9.7'
     annotationProcessor group: 'org.ow2.asm', name: 'asm-util', version: '9.7'
@@ -34,16 +30,6 @@ sourceSets {
     main {
         compileClasspath += jcef.output
         runtimeClasspath += jcef.output
-    }
-}
-
-loom {
-    if (file("src/main/resources/${mod_id}.accesswidener").exists()) {
-        accessWidenerPath.set(file("src/main/resources/${mod_id}.accesswidener"))
-    }
-    mixin {
-        useLegacyMixinAp = true
-        defaultRefmapName.set("${mod_id}.refmap.json")
     }
 }
 

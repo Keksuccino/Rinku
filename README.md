@@ -30,7 +30,7 @@ repositories {
 }
 
 dependencies {
-    modImplementation "de.keksuccino:mcef-fabric:2.2.0-1.21.11"
+    modImplementation "de.keksuccino:mcef-fabric:2.2.0-26.1.1"
 }
 ```
 
@@ -44,11 +44,13 @@ repositories {
 }
 
 dependencies {
-    implementation "de.keksuccino:mcef-neoforge:2.2.0-1.21.11"
+    implementation "de.keksuccino:mcef-neoforge:2.2.0-26.1.1"
 }
 ```
 
 NeoForge ships deobfuscated jars by default, so the dependency can be declared with a plain `implementation`. Replace the MCEF and Minecraft version as required.
+
+MCEF 26.1.1 targets Java 25.
 
 ## Building & Modifying MCEF
 

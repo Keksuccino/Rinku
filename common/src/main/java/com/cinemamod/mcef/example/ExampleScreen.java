@@ -387,7 +387,7 @@ public class ExampleScreen extends Screen {
         }
 
         if (event.codepoint() == (char) 0) return false;
-        browser.sendKeyTyped((char) event.codepoint(), event.modifiers());
+        browser.sendKeyTyped((char) event.codepoint(), 0);
         browser.setFocus(true);
         return true;
     }
