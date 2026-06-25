@@ -1,0 +1,21 @@
+{
+  "config_version": 1,
+  "projects": {
+    "mcef": {
+      "changelog_url": "https://github.com/Keksuccino/mcef/blob/master/changelog.txt",
+      "curseforge_project_id": "1366156",
+      "dependencies": {
+        "fabric": [
+          "fabric-api"
+        ],
+        "neoforge": []
+      },
+      "mandatory_environments": [],
+      "modrinth_project_id": "bQhBuv7x",
+      "supported_environments": [
+        "client",
+        "server"
+      ]
+    }
+  }
+}
