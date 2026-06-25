@@ -103,7 +103,7 @@ public class MCEFDownloaderMenu extends Screen {
     public void tick() {
         if (MCEFDownloadListener.INSTANCE.isDone() || MCEFDownloadListener.INSTANCE.isFailed()) {
             onClose();
-            Minecraft.getInstance().setScreen(menu);
+            Minecraft.getInstance().gui.setScreen(menu);
         }
     }
 

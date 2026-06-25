@@ -18,9 +18,9 @@ public class MCEFExampleMod {
 
     public void onTick() {
         // Check if our key was pressed
-        if (KEY_MAPPING.isDown() && !(Minecraft.getInstance().screen instanceof ExampleScreen)) {
+        if (KEY_MAPPING.isDown() && !(Minecraft.getInstance().gui.screen() instanceof ExampleScreen)) {
             //Display the web browser UI.
-            Minecraft.getInstance().setScreen(new ExampleScreen(Component.literal("Example Screen")));
+            Minecraft.getInstance().gui.setScreen(new ExampleScreen(Component.literal("Example Screen")));
         }
     }
 

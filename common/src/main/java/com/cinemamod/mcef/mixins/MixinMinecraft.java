@@ -1,23 +1,11 @@
 package com.cinemamod.mcef.mixins;
 
-import com.cinemamod.mcef.MCEF;
 import com.cinemamod.mcef.MCEFPlatform;
-import com.cinemamod.mcef.internal.MCEFDownloadListener;
-import com.cinemamod.mcef.internal.MCEFDownloaderMenu;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screens.*;
-import net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen;
-import net.minecraft.client.gui.screens.multiplayer.SafetyScreen;
-import net.minecraft.client.gui.screens.packs.PackSelectionScreen;
-import net.minecraft.client.gui.screens.worldselection.AbstractGameRulesScreen;
-import net.minecraft.client.gui.screens.worldselection.CreateWorldScreen;
-import net.minecraft.client.gui.screens.worldselection.ExperimentsScreen;
-import net.minecraft.client.gui.screens.worldselection.SelectWorldScreen;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -28,80 +16,15 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @Mixin(Minecraft.class)
 public abstract class MixinMinecraft {
     @Unique
-    private static final Logger LOGGER = LoggerFactory.getLogger("MCEF");
+    private static final Logger LOGGER_MCEF = LoggerFactory.getLogger("MCEF");
 
-    @Unique
-    private static final AtomicBoolean RECURSION_DETECTOR_MCEF = new AtomicBoolean(false);
     @Unique
     private static final String JCEF_HELPER_EXECUTABLE_WINDOWS_MCEF = "jcef_helper.exe";
-
-    @Shadow
-    public abstract void setScreen(@Nullable Screen screen);
-
-    @Inject(method = "setScreen", at = @At("HEAD"), cancellable = true)
-    public void head_setScreen_MCEF(Screen screen, CallbackInfo info) {
-
-        if (!MCEF.isInitialized()) {
-            boolean recursionValue = RECURSION_DETECTOR_MCEF.get();
-            RECURSION_DETECTOR_MCEF.set(true);
-
-            // regardless of what screen the game opens to, MCEF must try to initialize
-            // if it does not, there are bigger problems
-            if (
-                // mods may try to set the screen before the first screen opens
-                // in the event that this happens, recursion would happen
-                // so if this is detected, not try to open the screen again, as that could cause a crash
-                    !recursionValue ||
-                            screen instanceof TitleScreen ||
-                            screen instanceof LevelLoadingScreen ||
-                            screen instanceof SelectWorldScreen ||
-                            screen instanceof DirectJoinServerScreen ||
-                            screen instanceof ConnectScreen ||
-                            screen instanceof AccessibilityOnboardingScreen ||
-                            screen instanceof SafetyScreen ||
-                            screen instanceof JoinMultiplayerScreen ||
-                            screen instanceof CreateWorldScreen ||
-                            screen instanceof AbstractGameRulesScreen ||
-                            screen instanceof ExperimentsScreen ||
-                            screen instanceof PackSelectionScreen ||
-                            screen instanceof CreateFlatWorldScreen ||
-                            screen instanceof CreateBuffetWorldScreen
-            ) {
-                // If the download is done and didn't fail
-                if (MCEFDownloadListener.INSTANCE.isDone() && !MCEFDownloadListener.INSTANCE.isFailed()) {
-                    LOGGER.debug("MCEF already finished downloading, scheduling loading.");
-                    Minecraft.getInstance().execute((() -> {
-                        LOGGER.debug("MCEF is attempting to load.");
-                        try {
-                            Thread.sleep(1000);
-                        } catch (InterruptedException e) {
-                            LOGGER.error("I don't even know what occurred here.", e);
-                        }
-                        MCEF.initialize();
-                    }));
-                }
-                // If the download is not done and didn't fail
-                else if (!MCEFDownloadListener.INSTANCE.isDone() && !MCEFDownloadListener.INSTANCE.isFailed()) {
-                    LOGGER.debug("MCEF has not finished loading, displaying loading screen.");
-                    setScreen(new MCEFDownloaderMenu(screen));
-                    info.cancel();
-                }
-                // If the download failed
-                else if (MCEFDownloadListener.INSTANCE.isFailed()) {
-                    LOGGER.error("MCEF failed to initialize!");
-                }
-            }
-
-            RECURSION_DETECTOR_MCEF.set(recursionValue);
-        }
-
-    }
 
     /**
      * Temporary workaround to address lingering JCEF processes on Windows.
@@ -116,7 +39,7 @@ public abstract class MixinMinecraft {
 
         Path mcefLibrariesPath = resolveMcefLibrariesPath_MCEF();
         if (mcefLibrariesPath == null) {
-            LOGGER.warn("mcef.libraries.path is not set, skipping scoped JCEF helper cleanup.");
+            LOGGER_MCEF.warn("mcef.libraries.path is not set, skipping scoped JCEF helper cleanup.");
             return;
         }
 
@@ -130,19 +53,19 @@ public abstract class MixinMinecraft {
 
                     if (terminateProcess_MCEF(processHandle)) {
                         terminatedProcesses.incrementAndGet();
-                        LOGGER.warn("Terminated lingering JCEF helper process (pid={}).", processHandle.pid());
+                        LOGGER_MCEF.warn("Terminated lingering JCEF helper process (pid={}).", processHandle.pid());
                     }
                 } catch (Exception e) {
-                    LOGGER.debug("Unable to inspect process {} for scoped JCEF cleanup.", processHandle.pid(), e);
+                    LOGGER_MCEF.debug("Unable to inspect process {} for scoped JCEF cleanup.", processHandle.pid(), e);
                 }
             });
         } catch (Exception e) {
-            LOGGER.error("Unable to enumerate processes for scoped JCEF cleanup.", e);
+            LOGGER_MCEF.error("Unable to enumerate processes for scoped JCEF cleanup.", e);
             return;
         }
 
         if (terminatedProcesses.get() > 0) {
-            LOGGER.warn("Terminated {} lingering JCEF helper process(es) under {}.",
+            LOGGER_MCEF.warn("Terminated {} lingering JCEF helper process(es) under {}.",
                     terminatedProcesses.get(), mcefLibrariesPath);
         }
 

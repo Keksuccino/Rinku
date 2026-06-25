@@ -72,7 +72,7 @@ public class ExampleScreen extends Screen {
                 }
 
                 minecraft.execute(() -> {
-                    if (minecraft.screen != ExampleScreen.this || urlBox == null || url == null || url.isBlank()) {
+                    if (minecraft.gui.screen() != ExampleScreen.this || urlBox == null || url == null || url.isBlank()) {
                         return;
                     }
                     if (!url.equals(urlBox.getValue())) {

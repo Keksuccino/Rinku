@@ -20,12 +20,11 @@
 
 package com.cinemamod.mcef;
 
+import com.mojang.blaze3d.GpuFormat;
 import com.mojang.blaze3d.opengl.GlStateManager;
 import com.mojang.blaze3d.opengl.GlTexture;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.GpuTexture;
-import com.mojang.blaze3d.textures.TextureFormat;
-import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
 import java.nio.ByteBuffer;
@@ -137,7 +136,7 @@ public class MCEFRenderer {
             texture = RenderSystem.getDevice().createTexture(
                 label,
                 GpuTexture.USAGE_TEXTURE_BINDING | GpuTexture.USAGE_COPY_DST,
-                TextureFormat.RGBA8,
+                GpuFormat.RGBA8_UNORM,
                 width,
                 height,
                 1, // depthOrLayers
@@ -221,7 +220,6 @@ public class MCEFRenderer {
                 .writeToTexture(
                         texture,
                         uploadBuffer.slice(),
-                        NativeImage.Format.RGBA,
                         0,
                         0,
                         destinationX,
