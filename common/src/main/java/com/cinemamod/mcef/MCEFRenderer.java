@@ -143,11 +143,6 @@ public class MCEFRenderer {
                 1, // depthOrLayers
                 1  // mipLevels
             );
-
-            // Configure texture parameters
-            //TODO EXPERIMENTAL
-//            texture.setTextureFilter(FilterMode.LINEAR, FilterMode.LINEAR, false);
-//            texture.setAddressMode(AddressMode.CLAMP_TO_EDGE);
             
             textureWidth = width;
             textureHeight = height;
