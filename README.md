@@ -50,8 +50,6 @@ dependencies {
 
 NeoForge ships deobfuscated jars by default, so the dependency can be declared with a plain `implementation`. Replace the MCEF and Minecraft version as required.
 
-MCEF 26.1.1 targets Java 25.
-
 ## Building & Modifying MCEF
 
 After cloning this repo, you will need to clone the java-cef git submodule. There is a gradle task for this: `./gradlew cloneJcef`.
