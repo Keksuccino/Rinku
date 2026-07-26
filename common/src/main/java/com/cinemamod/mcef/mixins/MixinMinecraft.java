@@ -1,6 +1,7 @@
 package com.cinemamod.mcef.mixins;
 
 import com.cinemamod.mcef.MCEFPlatform;
+import com.cinemamod.mcef.MCEFRenderCoordinator;
 import net.minecraft.client.Minecraft;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -25,6 +26,18 @@ public abstract class MixinMinecraft {
 
     @Unique
     private static final String JCEF_HELPER_EXECUTABLE_WINDOWS_MCEF = "jcef_helper.exe";
+
+    // Keep this as a direct frame hook: Minecraft may discard queued executor tasks during shutdown.
+    @Inject(method = "runTick", at = @At("HEAD"))
+    private void before_runTick_MCEF(boolean advanceGameTime, CallbackInfo info) {
+        MCEFRenderCoordinator.pumpOnRenderThread();
+    }
+
+    // Drain and close browser GPU resources before vanilla tears down the render device and GL context.
+    @Inject(method = "close", at = @At("HEAD"))
+    private void before_close_MCEF(CallbackInfo info) {
+        MCEFRenderCoordinator.shutdownOnRenderThread();
+    }
 
     /**
      * Temporary workaround to address lingering JCEF processes on Windows.

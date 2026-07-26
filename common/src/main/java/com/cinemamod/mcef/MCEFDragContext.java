@@ -23,11 +23,39 @@ package com.cinemamod.mcef;
 import org.cef.callback.CefDragData;
 import org.cef.misc.CefCursorType;
 
+import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
+
 public class MCEFDragContext {
-    private CefDragData dragData = null;
-    private int dragMask = 0;
-    private int cursorOverride = -1;
-    private int actualCursor = -1;
+    private static final int NO_CURSOR_OVERRIDE = -1;
+    private static final MCEFDragSessionController.Callbacks<CefDragData> NOOP_CALLBACKS = new MCEFDragSessionController.Callbacks<>() {
+        @Override
+        public void targetEnter(CefDragData resource, int x, int y, int modifiers, int allowedOperations) {}
+
+        @Override
+        public void targetDrop(int x, int y, int modifiers) {}
+
+        @Override
+        public void targetLeave() {}
+
+        @Override
+        public void sourceEndedAt(int x, int y, int operation) {}
+
+        @Override
+        public void sourceSystemDragEnded() {}
+    };
+
+    private final MCEFDragSessionController<CefDragData> dragSession = new MCEFDragSessionController<>(CefDragData::dispose, NO_CURSOR_OVERRIDE);
+    private final MCEFDragSessionController.Callbacks<CefDragData> callbacks;
+    private final AtomicInteger actualCursor = new AtomicInteger(NO_CURSOR_OVERRIDE);
+
+    public MCEFDragContext() {
+        this(NOOP_CALLBACKS);
+    }
+
+    MCEFDragContext(MCEFDragSessionController.Callbacks<CefDragData> callbacks) {
+        this.callbacks = Objects.requireNonNull(callbacks, "callbacks");
+    }
 
     /**
      * Used to prevent re-selecting stuff while dragging
@@ -37,7 +65,7 @@ public class MCEFDragContext {
      * @return a mask modified based on if the user is dragging
      */
     public int getVirtualModifiers(int btnMask) {
-        return dragData != null ? 0 : btnMask;
+        return isDragging() ? 0 : btnMask;
     }
 
     /**
@@ -49,9 +77,8 @@ public class MCEFDragContext {
      * @return the drag operation modified cursor if dragging, or the actual cursor if not
      */
     public int getVirtualCursor(int cursorType) {
-        actualCursor = cursorType;
-        if (cursorOverride != -1) cursorType = cursorOverride;
-        return cursorType;
+        actualCursor.set(cursorType);
+        return dragSession.virtualCursor(cursorType);
     }
 
     /**
@@ -60,7 +87,11 @@ public class MCEFDragContext {
      * @return true if the user is dragging, elsewise false
      */
     public boolean isDragging() {
-        return dragData != null;
+        return dragSession.isDragging();
+    }
+
+    boolean isTransitioning() {
+        return dragSession.isTransitioning();
     }
 
     /**
@@ -69,7 +100,7 @@ public class MCEFDragContext {
      * @return the current drag operation's data
      */
     public CefDragData getDragData() {
-        return dragData;
+        return dragSession.resource();
     }
 
     /**
@@ -78,7 +109,7 @@ public class MCEFDragContext {
      * @return -1 for any, 0 for none, 1 for copy (TODO: others)
      */
     public int getMask() {
-        return dragMask;
+        return dragSession.allowedOperations();
     }
 
     /**
@@ -87,42 +118,53 @@ public class MCEFDragContext {
      * @return the cursor that has been set by the browser, disregarding drag operations
      */
     public int getActualCursor() {
-        return actualCursor;
+        return actualCursor.get();
     }
 
     public void startDragging(CefDragData dragData, int mask) {
-        this.dragData = dragData;
-        this.dragMask = mask;
+        dragSession.start(dragData, mask, 0, 0, 0, callbacks);
     }
 
     public void stopDragging() {
-        dragData.dispose();
-        dragData = null;
-        dragMask = 0;
-        cursorOverride = -1;
+        dragSession.cancel(callbacks);
+    }
+
+    /**
+     * Clears and disposes the current drag operation. Repeated calls are safe no-ops.
+     *
+     * @return whether this call detached an active drag operation
+     */
+    public boolean reset() {
+        return dragSession.cancel(callbacks);
     }
 
     public boolean updateCursor(int operation) {
-        if (dragData == null) return false;
+        int cursorOverride = switch (operation) {
+            case CefDragData.DragOperations.DRAG_OPERATION_NONE -> CefCursorType.NO_DROP.getId();
+            case CefDragData.DragOperations.DRAG_OPERATION_COPY -> CefCursorType.COPY.getId();
+            case CefDragData.DragOperations.DRAG_OPERATION_MOVE -> CefCursorType.MOVE.getId();
+            default -> NO_CURSOR_OVERRIDE;
+        };
+        return dragSession.updateOperation(operation, cursorOverride);
+    }
 
-        int currentOverride = cursorOverride;
+    int getCurrentVirtualCursor() {
+        return dragSession.virtualCursor(actualCursor.get());
+    }
 
-        switch (operation) {
-            case 0:
-                cursorOverride = CefCursorType.NO_DROP.ordinal();
-                break;
-            case 1:
-                cursorOverride = CefCursorType.COPY.ordinal();
-                break;
-            // TODO: this is a guess, based off https://magpcss.org/ceforum/apidocs3/projects/(default)/cef_drag_operations_mask_t.html
-            // not sure if it's correct
-            case 16:
-                cursorOverride = CefCursorType.MOVE.ordinal();
-                break;
-            default: // TODO: I'm not sure of the numbers for these
-                cursorOverride = -1;
-        }
+    boolean startDraggingOwned(CefDragData dragData, int mask, int x, int y, int modifiers) {
+        return dragSession.start(dragData, mask, x, y, modifiers, callbacks);
+    }
 
-        return currentOverride != cursorOverride && cursorOverride != -1;
+    boolean finishDragging(int x, int y, int modifiers) {
+        return dragSession.finish(x, y, modifiers, callbacks);
+    }
+
+    boolean cancelDrag() {
+        return dragSession.cancel(callbacks);
+    }
+
+    void close() {
+        dragSession.close(callbacks);
     }
 }

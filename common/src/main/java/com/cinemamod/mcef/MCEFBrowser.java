@@ -38,6 +38,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.awt.*;
 import java.nio.ByteBuffer;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.glfw.GLFW.*;
 
@@ -48,15 +50,50 @@ import static org.lwjgl.glfw.GLFW.*;
  */
 public class MCEFBrowser extends CefBrowserOsr {
     private static final Logger LOGGER = LoggerFactory.getLogger("MCEF");
+    private static final int MAX_PENDING_PAINT_STREAMS_MCEF = 2;
 
     /**
      * The renderer for the browser.
      */
     private final MCEFRenderer renderer;
+    private final AsyncResourceLeaseManager<PaintSurface_MCEF, AsyncPaintFrame_MCEF> asyncPaintBufferLeases_MCEF = new AsyncResourceLeaseManager<>(frame -> MemoryUtil.memFree(frame.buffer()), AsyncPaintFrame_MCEF::requireFullUpload, MAX_PENDING_PAINT_STREAMS_MCEF);
+    private final ReentrantLock paintCallbackLock_MCEF = new ReentrantLock();
+    private final BrowserCloseController closeController_MCEF = new BrowserCloseController();
+    private final AtomicBoolean deferredNativeClose_MCEF = new AtomicBoolean();
+    private final PopupPaintState popupPaintState_MCEF = new PopupPaintState();
+    private boolean rendererInitialized_MCEF;
+    private boolean rendererCleanupStarted_MCEF;
+    private int renderOperationDepth_MCEF;
+    private final MCEFDragSessionController.Callbacks<CefDragData> dragCallbacks_MCEF = new MCEFDragSessionController.Callbacks<>() {
+        @Override
+        public void targetEnter(CefDragData dragData, int x, int y, int modifiers, int allowedOperations) {
+            MCEFBrowser.this.dragTargetDragEnter(dragData, new Point(x, y), modifiers, allowedOperations);
+        }
+
+        @Override
+        public void targetDrop(int x, int y, int modifiers) {
+            MCEFBrowser.this.dragTargetDrop(new Point(x, y), modifiers);
+        }
+
+        @Override
+        public void targetLeave() {
+            MCEFBrowser.this.dragTargetDragLeave();
+        }
+
+        @Override
+        public void sourceEndedAt(int x, int y, int operation) {
+            MCEFBrowser.this.dragSourceEndedAt(new Point(x, y), operation);
+        }
+
+        @Override
+        public void sourceSystemDragEnded() {
+            MCEFBrowser.this.dragSourceSystemDragEnded();
+        }
+    };
     /**
      * Stores information about drag & drop.
      */
-    private final MCEFDragContext dragContext = new MCEFDragContext();
+    private final MCEFDragContext dragContext = new MCEFDragContext(dragCallbacks_MCEF);
     /**
      * A listener that defines that happens when a cursor changes in the browser.
      * E.g. when you've hovered over a button, an input box, are selecting text, etc...
@@ -95,11 +132,17 @@ public class MCEFBrowser extends CefBrowserOsr {
         super(client.getHandle(), url, transparent, null);
         renderer = new MCEFRenderer(transparent);
         cursorChangeListener = (cefCursorID) -> setCursor(resolveCursorType_MCEF(cefCursorID));
-
+        if (!MCEFRenderCoordinator.register(this)) {
+            IllegalStateException registrationFailure = new IllegalStateException("Cannot create an MCEF browser after render shutdown has started");
+            try {
+                closeBrowser_MCEF(false);
+            } catch (Throwable lifecycleFailure) {
+                addSuppressed_MCEF(registrationFailure, lifecycleFailure);
+            }
+            throw registrationFailure;
+        }
         if (RenderSystem.isOnRenderThread()) {
-            renderer.initialize();
-        } else {
-            Minecraft.getInstance().submit(renderer::initialize);
+            initializeRendererOnRenderThread_MCEF();
         }
     }
 
@@ -157,103 +200,195 @@ public class MCEFBrowser extends CefBrowserOsr {
     // Popups
     @Override
     public void onPopupShow(CefBrowser browser, boolean show) {
-        super.onPopupShow(browser, show);
-        showPopup = show;
+        paintCallbackLock_MCEF.lock();
+        try {
+            super.onPopupShow(browser, show);
+            showPopup = show;
+            if (popupPaintState_MCEF.updateVisibility(show)) {
+                popupDrawn = false;
+                requestPopupStateResync_MCEF();
+            }
+        } finally {
+            paintCallbackLock_MCEF.unlock();
+        }
     }
 
     @Override
     public void onPopupSize(CefBrowser browser, Rectangle size) {
-        super.onPopupSize(browser, size);
-        if (size == null || size.width <= 0 || size.height <= 0) {
-            popupSize = null;
-            popupGraphics = null;
-            popupDrawn = false;
-            return;
-        }
+        paintCallbackLock_MCEF.lock();
+        try {
+            super.onPopupSize(browser, size);
+            boolean geometryChanged = popupPaintState_MCEF.updateGeometry(size);
+            popupSize = popupPaintState_MCEF.geometry();
+            if (!geometryChanged) {
+                return;
+            }
 
-        popupSize = new Rectangle(size);
-        int popupBufferSize = getRequiredBufferSize_MCEF(size.width, size.height);
-        if (popupBufferSize <= 0) {
-            popupGraphics = null;
             popupDrawn = false;
-            return;
+            try {
+                if (popupSize == null) {
+                    popupGraphics = null;
+                    return;
+                }
+                int popupBufferSize = getRequiredBufferSize_MCEF(popupSize.width, popupSize.height);
+                if (popupBufferSize <= 0) {
+                    popupGraphics = null;
+                    return;
+                }
+                if (popupGraphics == null || popupGraphics.capacity() != popupBufferSize) {
+                    popupGraphics = ByteBuffer.allocateDirect(popupBufferSize);
+                }
+            } finally {
+                requestPopupStateResync_MCEF();
+            }
+        } finally {
+            paintCallbackLock_MCEF.unlock();
         }
+    }
 
-        if (popupGraphics == null || popupGraphics.capacity() != popupBufferSize) {
-            popupGraphics = ByteBuffer.allocateDirect(popupBufferSize);
+    private void requestPopupStateResync_MCEF() {
+        asyncPaintBufferLeases_MCEF.requireResync(PaintSurface_MCEF.VIEW);
+        asyncPaintBufferLeases_MCEF.requireResync(PaintSurface_MCEF.POPUP);
+        if (asyncPaintBufferLeases_MCEF.isAccepting()) {
+            invalidate();
         }
     }
 
     // Graphics
+    /**
+     * Paint listeners are notified only after MCEF has consumed the callback buffer synchronously or has copied it
+     * into the bounded latest-frame mailbox. Replaced pending frames are coalesced into a full upload of the newest
+     * full-frame copy for that view or popup stream.
+     */
     @Override
     public void onPaint(CefBrowser browser, boolean popup, Rectangle[] dirtyRects, ByteBuffer buffer, int width, int height) {
-        if (dirtyRects == null || dirtyRects.length == 0 || buffer == null)
-            return;
-
-        Rectangle[] dirtyRectsCopy = new Rectangle[dirtyRects.length];
-        for (int i = 0; i < dirtyRects.length; i++) {
-            Rectangle dirtyRect = dirtyRects[i];
-            dirtyRectsCopy[i] = dirtyRect == null ? null : new Rectangle(dirtyRect);
+        if (dirtyRects == null || dirtyRects.length == 0 || buffer == null) return;
+        if (onPaint_MCEF(popup, dirtyRects, buffer, width, height)) {
+            // The base class gives listeners isolated callback-scoped views.
+            super.onPaint(browser, popup, dirtyRects, buffer, width, height);
         }
-
-        Rectangle popupRectSnapshot = popupSize == null ? null : new Rectangle(popupSize);
-        boolean showPopupSnapshot = showPopup;
-
-        if (RenderSystem.isOnRenderThread()) {
-            onPaintRenderThread_MCEF(
-                    popup,
-                    dirtyRectsCopy,
-                    buffer,
-                    width,
-                    height,
-                    popupRectSnapshot,
-                    showPopupSnapshot
-            );
-            return;
-        }
-
-        ByteBuffer bufferCopy = cloneBufferForAsyncPaint_MCEF(buffer);
-        Minecraft.getInstance().submit(() -> {
-            try {
-                onPaintRenderThread_MCEF(
-                        popup,
-                        dirtyRectsCopy,
-                        bufferCopy,
-                        width,
-                        height,
-                        popupRectSnapshot,
-                        showPopupSnapshot
-                );
-            } finally {
-                MemoryUtil.memFree(bufferCopy);
-            }
-        });
     }
 
-    private void onPaintRenderThread_MCEF(
-            boolean popup,
-            Rectangle[] dirtyRects,
-            ByteBuffer buffer,
-            int width,
-            int height,
-            Rectangle popupRect,
-            boolean showPopupSnapshot
-    ) {
+    private boolean onPaint_MCEF(boolean popup, Rectangle[] dirtyRects, ByteBuffer buffer, int width, int height) {
+        paintCallbackLock_MCEF.lock();
+        try {
+            if (!asyncPaintBufferLeases_MCEF.isAccepting() || closeController_MCEF.isCloseRequested()) {
+                return false;
+            }
+            if (RenderSystem.isOnRenderThread()) {
+                // Apply older copied callbacks first so this callback can safely upload only its dirty regions.
+                pumpAsyncPaintsOnRenderThread_MCEF();
+                if (closeController_MCEF.isCloseRequested()) {
+                    return false;
+                }
+                Rectangle[] dirtyRectsCopy = copyDirtyRects_MCEF(dirtyRects);
+                Rectangle popupRectSnapshot = popupPaintState_MCEF.geometry();
+                boolean showPopupSnapshot = popupPaintState_MCEF.visible();
+                long popupStateGeneration = popupPaintState_MCEF.generation();
+                PaintSurface_MCEF surface = PaintSurface_MCEF.fromPopup(popup);
+                boolean forceFullUpload = asyncPaintBufferLeases_MCEF.consumeResync(surface);
+                beginRenderOperation_MCEF();
+                try {
+                    onPaintRenderThread_MCEF(popup, dirtyRectsCopy, buffer, width, height, popupRectSnapshot, showPopupSnapshot, popupStateGeneration, forceFullUpload);
+                } catch (Throwable failure) {
+                    if (popup) {
+                        invalidateRetainedPopupPixels_MCEF();
+                    }
+                    asyncPaintBufferLeases_MCEF.requireResync(surface);
+                    throw failure;
+                } finally {
+                    endRenderOperation_MCEF();
+                }
+                return !closeController_MCEF.isCloseRequested();
+            }
+
+            Minecraft minecraft = Minecraft.getInstance();
+            if (minecraft == null || !minecraft.isRunning()) {
+                return false;
+            }
+            PaintSurface_MCEF surface = PaintSurface_MCEF.fromPopup(popup);
+            return asyncPaintBufferLeases_MCEF.offer(surface, () -> createAsyncPaintFrame_MCEF(surface, dirtyRects, buffer, width, height), this::renderAsyncPaintFrame_MCEF, this::logAsyncPaintFailure_MCEF);
+        } finally {
+            paintCallbackLock_MCEF.unlock();
+        }
+    }
+
+    private void logAsyncPaintFailure_MCEF(Throwable failure) {
+        LOGGER.warn("Asynchronous browser paint failed.", failure);
+    }
+
+    private AsyncPaintFrame_MCEF createAsyncPaintFrame_MCEF(PaintSurface_MCEF surface, Rectangle[] dirtyRects, ByteBuffer buffer, int width, int height) {
+        ByteBuffer bufferCopy = cloneBufferForAsyncPaint_MCEF(buffer);
+        try {
+            Rectangle popupRectSnapshot = popupPaintState_MCEF.geometry();
+            return new AsyncPaintFrame_MCEF(surface, copyDirtyRects_MCEF(dirtyRects), bufferCopy, width, height, popupRectSnapshot, popupPaintState_MCEF.visible(), popupPaintState_MCEF.generation());
+        } catch (Throwable failure) {
+            MemoryUtil.memFree(bufferCopy);
+            throw failure;
+        }
+    }
+
+    private void renderAsyncPaintFrame_MCEF(AsyncPaintFrame_MCEF frame) {
+        paintCallbackLock_MCEF.lock();
+        try {
+            Rectangle popupRect = frame.popupRect();
+            boolean showPopupSnapshot = frame.showPopup();
+            long popupStateGeneration = frame.popupStateGeneration();
+            boolean forceFullUpload = frame.requiresFullUpload();
+            if (!popupPaintState_MCEF.isCurrentGeneration(popupStateGeneration)) {
+                // Popup pixels belong to one popup geometry; never apply them after that geometry has changed.
+                if (frame.surface() == PaintSurface_MCEF.POPUP) {
+                    asyncPaintBufferLeases_MCEF.requireResync(PaintSurface_MCEF.POPUP);
+                    return;
+                }
+                popupRect = popupPaintState_MCEF.geometry();
+                showPopupSnapshot = popupPaintState_MCEF.visible();
+                popupStateGeneration = popupPaintState_MCEF.generation();
+                forceFullUpload = true;
+            }
+            try {
+                onPaintRenderThread_MCEF(frame.surface() == PaintSurface_MCEF.POPUP, frame.dirtyRects(), frame.buffer(), frame.width(), frame.height(), popupRect, showPopupSnapshot, popupStateGeneration, forceFullUpload);
+            } catch (Throwable failure) {
+                if (frame.surface() == PaintSurface_MCEF.POPUP) {
+                    invalidateRetainedPopupPixels_MCEF();
+                }
+                throw failure;
+            }
+        } finally {
+            paintCallbackLock_MCEF.unlock();
+        }
+    }
+
+    void pumpAsyncPaintsOnRenderThread_MCEF() {
+        RenderSystem.assertOnRenderThread();
+        if (rendererCleanupStarted_MCEF) {
+            return;
+        }
+        if (closeController_MCEF.isCloseRequested()) {
+            cleanupBrowserResourcesOnRenderThread_MCEF();
+            return;
+        }
+        initializeRendererOnRenderThread_MCEF();
+        beginRenderOperation_MCEF();
+        try {
+            asyncPaintBufferLeases_MCEF.drain(MAX_PENDING_PAINT_STREAMS_MCEF);
+        } finally {
+            endRenderOperation_MCEF();
+        }
+    }
+
+    void shutdownOnRenderThread_MCEF() {
+        RenderSystem.assertOnRenderThread();
+        closeBrowser_MCEF(true);
+    }
+
+    private void onPaintRenderThread_MCEF(boolean popup, Rectangle[] dirtyRects, ByteBuffer buffer, int width, int height, Rectangle popupRect, boolean showPopupSnapshot, long popupStateGeneration, boolean forceFullUpload) {
         if (!popup) {
-            if (lastWidth != width || lastHeight != height) {
+            if (forceFullUpload || lastWidth != width || lastHeight != height || !renderer.supportsDirtyRectUpload()) {
                 lastWidth = width;
                 lastHeight = height;
                 renderer.onPaint(buffer, width, height);
-                return;
-            }
-
-            if (!renderer.supportsDirtyRectUpload()) {
-                renderer.onPaint(buffer, width, height);
-                if (!showPopupSnapshot) {
-                    popupGraphics = null;
-                    popupSize = null;
-                    popupDrawn = false;
-                }
+                restorePopupAfterViewPaint_MCEF(width, height, popupRect, showPopupSnapshot, popupStateGeneration);
                 return;
             }
 
@@ -271,94 +406,107 @@ public class MCEFBrowser extends CefBrowserOsr {
                 renderer.onPaint(buffer, clippedRect.x, clippedRect.y, clippedRect.width, clippedRect.height);
             }
 
-            if ((popupDrawn || showPopupSnapshot) && popupRect != null) {
-                Rectangle clippedPopupRect = clipRect_MCEF(popupRect, width, height);
-                if (clippedPopupRect == null) {
-                    popupGraphics = null;
-                    popupSize = null;
-                    popupDrawn = false;
-                    return;
-                }
-
-                if (!showPopupSnapshot) {
-                    GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, clippedPopupRect.x);
-                    GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, clippedPopupRect.y);
-                    renderer.onPaint(buffer, clippedPopupRect.x, clippedPopupRect.y, clippedPopupRect.width, clippedPopupRect.height);
-                    popupGraphics = null;
-                    popupSize = null;
-                    popupDrawn = false;
-                } else if (popupDrawn) {
-                    ByteBuffer popupBuffer = popupGraphics;
-                    int requiredPopupBufferSize = getRequiredBufferSize_MCEF(popupRect.width, popupRect.height);
-                    if (popupBuffer == null || requiredPopupBufferSize <= 0 || popupBuffer.capacity() < requiredPopupBufferSize) {
-                        return;
-                    }
-
-                    GlStateManager._pixelStore(GL_UNPACK_ROW_LENGTH, popupRect.width);
-                    GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, clippedPopupRect.x - popupRect.x);
-                    GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, clippedPopupRect.y - popupRect.y);
-                    renderer.onPaint(popupBuffer, clippedPopupRect.x, clippedPopupRect.y, clippedPopupRect.width, clippedPopupRect.height);
-                }
-            }
+            restorePopupAfterViewPaint_MCEF(width, height, popupRect, showPopupSnapshot, popupStateGeneration);
         } else {
-            if (popupRect == null || popupRect.width <= 0 || popupRect.height <= 0 || !renderer.supportsDirtyRectUpload()) {
+            if (!popupPaintState_MCEF.acceptsPaint(popupStateGeneration, popupRect, showPopupSnapshot, width, height) || !renderer.supportsDirtyRectUpload()) {
+                asyncPaintBufferLeases_MCEF.requireResync(PaintSurface_MCEF.POPUP);
                 return;
             }
 
-            GlStateManager._bindTexture(renderer.getTextureID());
+            int requiredPopupBufferSize = getRequiredBufferSize_MCEF(popupRect.width, popupRect.height);
+            if (requiredPopupBufferSize <= 0 || buffer.capacity() < requiredPopupBufferSize) {
+                asyncPaintBufferLeases_MCEF.requireResync(PaintSurface_MCEF.POPUP);
+                return;
+            }
 
             ByteBuffer popupBuffer = popupGraphics;
-            int requiredPopupBufferSize = getRequiredBufferSize_MCEF(popupRect.width, popupRect.height);
-            if (requiredPopupBufferSize <= 0) {
-                popupGraphics = null;
-                popupDrawn = false;
-                return;
-            }
-
             if (popupBuffer == null || popupBuffer.capacity() != requiredPopupBufferSize) {
                 popupBuffer = ByteBuffer.allocateDirect(requiredPopupBufferSize);
                 popupGraphics = popupBuffer;
+                invalidateRetainedPopupPixels_MCEF();
+                forceFullUpload = true;
             }
 
-            boolean paintedAnyRect = false;
-            for (Rectangle dirtyRect : dirtyRects) {
-                Rectangle clippedRect = clipRect_MCEF(dirtyRect, Math.min(width, popupRect.width), Math.min(height, popupRect.height));
-                if (clippedRect == null) {
+            forceFullUpload = forceFullUpload || popupPaintState_MCEF.requiresFullPaint(popupStateGeneration, popupRect, showPopupSnapshot);
+            boolean copiedCompleteFullFrame = false;
+            Rectangle[] paintRects = forceFullUpload ? new Rectangle[]{new Rectangle(0, 0, width, height)} : dirtyRects;
+            for (Rectangle dirtyRect : paintRects) {
+                PopupPaintGeometry.PaintPlan paintPlan = PopupPaintGeometry.plan(dirtyRect, width, height, popupRect.x, popupRect.y, renderer.getTextureWidth(), renderer.getTextureHeight());
+                if (paintPlan == null) {
                     continue;
                 }
 
-                GlStateManager._pixelStore(GL_UNPACK_ROW_LENGTH, width);
-                GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, clippedRect.x);
-                GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, clippedRect.y);
-                renderer.onPaint(
-                        buffer,
-                        popupRect.x + clippedRect.x,
-                        popupRect.y + clippedRect.y,
-                        clippedRect.width,
-                        clippedRect.height
-                );
+                // Retention stays in popup-local callback space and must include pixels which are currently offscreen.
+                copyRectRows_MCEF(buffer, width, popupBuffer, popupRect.width, paintPlan.retainedSource());
+                copiedCompleteFullFrame |= paintPlan.completeSourceFrame();
 
-                copyRectRows_MCEF(
-                        buffer,
-                        width,
-                        popupBuffer,
-                        popupRect.width,
-                        clippedRect
-                );
-                paintedAnyRect = true;
+                PopupPaintGeometry.Upload upload = paintPlan.upload();
+                if (upload == null) {
+                    continue;
+                }
+                PopupPaintGeometry.Region uploadSource = upload.source();
+                PopupPaintGeometry.Region uploadDestination = upload.destination();
+                GlStateManager._pixelStore(GL_UNPACK_ROW_LENGTH, width);
+                GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, uploadSource.x());
+                GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, uploadSource.y());
+                renderer.onPaint(buffer, uploadDestination.x(), uploadDestination.y(), uploadDestination.width(), uploadDestination.height());
             }
 
-            popupDrawn = paintedAnyRect;
+            // Full retained callback pixels are valid even when the popup had no visible destination pixels to upload.
+            if (forceFullUpload && (!copiedCompleteFullFrame || !popupPaintState_MCEF.markFullPainted(popupStateGeneration, popupRect, showPopupSnapshot, width, height))) {
+                invalidateRetainedPopupPixels_MCEF();
+                asyncPaintBufferLeases_MCEF.requireResync(PaintSurface_MCEF.POPUP);
+                return;
+            }
+            popupDrawn = popupPaintState_MCEF.canComposite(popupStateGeneration, popupRect, showPopupSnapshot);
         }
     }
 
-    private static void copyRectRows_MCEF(ByteBuffer src, int srcWidth, ByteBuffer dst, int dstWidth, Rectangle rect) {
+    private void restorePopupAfterViewPaint_MCEF(int viewWidth, int viewHeight, Rectangle popupRect, boolean showPopupSnapshot, long popupStateGeneration) {
+        if (!popupDrawn || !popupPaintState_MCEF.canComposite(popupStateGeneration, popupRect, showPopupSnapshot)) {
+            return;
+        }
+        PopupPaintGeometry.PaintPlan paintPlan = PopupPaintGeometry.plan(new Rectangle(0, 0, popupRect.width, popupRect.height), popupRect.width, popupRect.height, popupRect.x, popupRect.y, viewWidth, viewHeight);
+        if (paintPlan == null || paintPlan.upload() == null) {
+            return;
+        }
+        ByteBuffer popupBuffer = popupGraphics;
+        int requiredPopupBufferSize = getRequiredBufferSize_MCEF(popupRect.width, popupRect.height);
+        if (popupBuffer == null || requiredPopupBufferSize <= 0 || popupBuffer.capacity() < requiredPopupBufferSize) {
+            invalidateRetainedPopupPixels_MCEF();
+            asyncPaintBufferLeases_MCEF.requireResync(PaintSurface_MCEF.POPUP);
+            return;
+        }
+        PopupPaintGeometry.Upload upload = paintPlan.upload();
+        PopupPaintGeometry.Region uploadSource = upload.source();
+        PopupPaintGeometry.Region uploadDestination = upload.destination();
+        GlStateManager._pixelStore(GL_UNPACK_ROW_LENGTH, popupRect.width);
+        GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, uploadSource.x());
+        GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, uploadSource.y());
+        renderer.onPaint(popupBuffer, uploadDestination.x(), uploadDestination.y(), uploadDestination.width(), uploadDestination.height());
+    }
+
+    private void invalidateRetainedPopupPixels_MCEF() {
+        popupPaintState_MCEF.invalidateRetainedPixels();
+        popupDrawn = false;
+    }
+
+    private static Rectangle[] copyDirtyRects_MCEF(Rectangle[] dirtyRects) {
+        Rectangle[] copy = new Rectangle[dirtyRects.length];
+        for (int i = 0; i < dirtyRects.length; i++) {
+            Rectangle dirtyRect = dirtyRects[i];
+            copy[i] = dirtyRect == null ? null : new Rectangle(dirtyRect);
+        }
+        return copy;
+    }
+
+    private static void copyRectRows_MCEF(ByteBuffer src, int srcWidth, ByteBuffer dst, int dstWidth, PopupPaintGeometry.Region rect) {
         long srcAddr = MemoryUtil.memAddress(src);
         long dstAddr = MemoryUtil.memAddress(dst);
-        int bytesPerRow = rect.width << 2;
-        for (int row = 0; row < rect.height; row++) {
-            int srcOffset = ((rect.y + row) * srcWidth + rect.x) << 2;
-            int dstOffset = ((rect.y + row) * dstWidth + rect.x) << 2;
+        int bytesPerRow = rect.width() << 2;
+        for (int row = 0; row < rect.height(); row++) {
+            int srcOffset = ((rect.y() + row) * srcWidth + rect.x()) << 2;
+            int dstOffset = ((rect.y() + row) * dstWidth + rect.x()) << 2;
             MemoryUtil.memCopy(srcAddr + srcOffset, dstAddr + dstOffset, bytesPerRow);
         }
     }
@@ -400,9 +548,14 @@ public class MCEFBrowser extends CefBrowserOsr {
         sourceSlice.clear();
 
         ByteBuffer copy = MemoryUtil.memAlloc(sourceSlice.remaining());
-        copy.put(sourceSlice);
-        copy.flip();
-        return copy;
+        try {
+            copy.put(sourceSlice);
+            copy.flip();
+            return copy;
+        } catch (Throwable failure) {
+            MemoryUtil.memFree(copy);
+            throw failure;
+        }
     }
 
     public void resize(int width, int height) {
@@ -587,21 +740,30 @@ public class MCEFBrowser extends CefBrowserOsr {
     }
 
     // Drag & drop
+    /**
+     * MCEF is both the source and target for its emulated OSR drag. CEF requires every target
+     * callback to precede source completion: a drop uses TargetDrop -> SourceEndedAt ->
+     * SourceSystemDragEnded, while cancellation uses the explicitly permitted TargetLeave ->
+     * SourceSystemDragEnded path. TargetLeave is not sent after a successful drop because CEF
+     * defines leave and drop as alternative target endings.
+     */
     @Override
     public boolean startDragging(CefBrowser browser, CefDragData dragData, int mask, int x, int y) {
-        dragContext.startDragging(dragData, mask);
-        this.dragTargetDragEnter(dragContext.getDragData(), new Point(x, y), btnMask, dragContext.getMask());
-        // Indicates to CEF to not handle the drag event natively
-        // reason: native drag handling doesn't work with off screen rendering
-        return false;
+        try {
+            boolean handled = dragContext.startDraggingOwned(dragData, mask, x, y, btnMask);
+            if (!handled && !dragContext.isDragging()) restoreActualCursorAfterFailedStart_MCEF(null);
+            completeDeferredNativeCloseAfterStart_MCEF(null);
+            return handled;
+        } catch (RuntimeException | Error failure) {
+            if (!dragContext.isDragging()) restoreActualCursorAfterFailedStart_MCEF(failure);
+            completeDeferredNativeCloseAfterStart_MCEF(failure);
+            throw failure;
+        }
     }
 
     @Override
     public void updateDragCursor(CefBrowser browser, int operation) {
-        if (dragContext.updateCursor(operation))
-            // If the cursor to display for the drag event changes, then update the cursor
-            this.onCursorChange(this, dragContext.getVirtualCursor(dragContext.getActualCursor()));
-
+        if (dragContext.updateCursor(operation)) notifyCursorChange_MCEF(this, dragContext.getCurrentVirtualCursor());
         super.updateDragCursor(browser, operation);
     }
 
@@ -611,57 +773,273 @@ public class MCEFBrowser extends CefBrowserOsr {
     }
 
     public void finishDragging(int x, int y) {
-        dragTargetDrop(new Point(x, y), btnMask);
-        dragTargetDragLeave();
-        dragContext.stopDragging();
-        this.onCursorChange(this, dragContext.getActualCursor());
+        completeDragLifecycle_MCEF(() -> dragContext.finishDragging(x, y, btnMask));
     }
 
     public void cancelDrag() {
-        dragTargetDragLeave();
-        dragContext.stopDragging();
-        this.onCursorChange(this, dragContext.getActualCursor());
+        completeDragLifecycle_MCEF(dragContext::cancelDrag);
+    }
+
+    private void completeDragLifecycle_MCEF(DragCompletion_MCEF completion) {
+        boolean wasDragging = dragContext.isDragging();
+        Throwable failure = null;
+        try {
+            completion.complete();
+        } catch (RuntimeException | Error completionFailure) {
+            failure = completionFailure;
+        }
+        if (wasDragging && !dragContext.isDragging()) {
+            try {
+                notifyCursorChange_MCEF(this, dragContext.getActualCursor());
+            } catch (RuntimeException | Error cursorFailure) {
+                failure = mergeFailure_MCEF(failure, cursorFailure);
+            }
+        }
+        try {
+            completeDeferredNativeClose_MCEF();
+        } catch (RuntimeException | Error closeFailure) {
+            failure = mergeFailure_MCEF(failure, closeFailure);
+        }
+        rethrowLifecycleFailure_MCEF(failure);
+    }
+
+    private void completeDeferredNativeCloseAfterStart_MCEF(Throwable primaryFailure) {
+        try {
+            completeDeferredNativeClose_MCEF();
+        } catch (RuntimeException | Error closeFailure) {
+            if (primaryFailure == null) {
+                LOGGER.warn("Failed to continue a browser close after rejecting an in-progress drag.", closeFailure);
+            } else {
+                addSuppressed_MCEF(primaryFailure, closeFailure);
+            }
+        }
+    }
+
+    private void restoreActualCursorAfterFailedStart_MCEF(Throwable primaryFailure) {
+        try {
+            notifyCursorChange_MCEF(this, dragContext.getActualCursor());
+        } catch (RuntimeException | Error cursorFailure) {
+            if (primaryFailure == null) {
+                LOGGER.warn("Failed to restore the browser cursor after rejecting a drag.", cursorFailure);
+            } else {
+                addSuppressed_MCEF(primaryFailure, cursorFailure);
+            }
+        }
     }
 
     // Closing
     public void close() {
-        cleanupBrowserResourcesOnRenderThread_MCEF();
-        super.close(true);
+        close(true);
+    }
+
+    @Override
+    public void close(boolean force) {
+        if (!force) {
+            // A before-unload handler may cancel a non-forced close. Keep paint admission and GL
+            // resources alive until CEF confirms terminal closure through onBeforeClose().
+            super.close(false);
+            return;
+        }
+        closeBrowser_MCEF(RenderSystem.isOnRenderThread());
+    }
+
+    @Override
+    public void onBeforeClose() {
+        Throwable failure = null;
+        try {
+            requestClose_MCEF();
+        } catch (Throwable closeRequestFailure) {
+            failure = closeRequestFailure;
+        }
+        closeController_MCEF.markNativeClosed();
+        if (RenderSystem.isOnRenderThread()) {
+            try {
+                cleanupBrowserResourcesOnRenderThread_MCEF();
+            } catch (Throwable cleanupFailure) {
+                failure = mergeFailure_MCEF(failure, cleanupFailure);
+            }
+        }
+        try {
+            super.onBeforeClose();
+        } catch (Throwable nativeLifecycleFailure) {
+            failure = mergeFailure_MCEF(failure, nativeLifecycleFailure);
+        }
+        rethrowLifecycleFailure_MCEF(failure);
+    }
+
+    private void requestClose_MCEF() {
+        closeController_MCEF.requestClose(this::stopBrowserResourceAdmission_MCEF);
+    }
+
+    private void stopBrowserResourceAdmission_MCEF() {
+        Throwable failure = null;
+        try {
+            asyncPaintBufferLeases_MCEF.close();
+        } catch (RuntimeException | Error paintFailure) {
+            failure = paintFailure;
+        }
+        deferredNativeClose_MCEF.set(true);
+        try {
+            // Forced close reaches this path before super.close(true) makes CefBrowser_N reject
+            // drag callbacks. If close re-enters from one of those callbacks, native close must be
+            // deferred until the outer transition sends every target/source completion callback.
+            dragContext.close();
+        } catch (RuntimeException | Error dragFailure) {
+            failure = mergeFailure_MCEF(failure, dragFailure);
+        } finally {
+            if (!dragContext.isTransitioning()) deferredNativeClose_MCEF.set(false);
+        }
+        rethrowLifecycleFailure_MCEF(failure);
+    }
+
+    private void closeNativeBrowser_MCEF() {
+        closeController_MCEF.closeNative(() -> super.close(true));
+    }
+
+    private void completeDeferredNativeClose_MCEF() {
+        if (dragContext.isTransitioning() || !deferredNativeClose_MCEF.compareAndSet(true, false)) return;
+        closeNativeBrowser_MCEF();
+    }
+
+    private void closeBrowser_MCEF(boolean cleanupRenderer) {
+        Throwable failure = null;
+        try {
+            requestClose_MCEF();
+        } catch (Throwable closeRequestFailure) {
+            failure = closeRequestFailure;
+        }
+        if (cleanupRenderer) {
+            try {
+                cleanupBrowserResourcesOnRenderThread_MCEF();
+            } catch (Throwable cleanupFailure) {
+                failure = mergeFailure_MCEF(failure, cleanupFailure);
+            }
+        }
+        if (!deferredNativeClose_MCEF.get()) {
+            try {
+                closeNativeBrowser_MCEF();
+            } catch (Throwable nativeCloseFailure) {
+                failure = mergeFailure_MCEF(failure, nativeCloseFailure);
+            }
+        }
+        rethrowLifecycleFailure_MCEF(failure);
+    }
+
+    private void initializeRendererOnRenderThread_MCEF() {
+        RenderSystem.assertOnRenderThread();
+        if (rendererInitialized_MCEF || rendererCleanupStarted_MCEF || closeController_MCEF.isCloseRequested()) {
+            return;
+        }
+        try {
+            renderer.initialize();
+            rendererInitialized_MCEF = true;
+        } catch (Throwable initializationFailure) {
+            try {
+                closeBrowser_MCEF(true);
+            } catch (Throwable lifecycleFailure) {
+                addSuppressed_MCEF(initializationFailure, lifecycleFailure);
+            }
+            throw initializationFailure;
+        }
+    }
+
+    private void beginRenderOperation_MCEF() {
+        RenderSystem.assertOnRenderThread();
+        if (rendererCleanupStarted_MCEF) {
+            throw new IllegalStateException("Browser renderer has already been cleaned up");
+        }
+        renderOperationDepth_MCEF++;
+    }
+
+    private void endRenderOperation_MCEF() {
+        renderOperationDepth_MCEF--;
+        if (renderOperationDepth_MCEF < 0) {
+            renderOperationDepth_MCEF = 0;
+            throw new IllegalStateException("Browser render operation depth became negative");
+        }
+        if (renderOperationDepth_MCEF == 0 && closeController_MCEF.isCloseRequested()) {
+            cleanupBrowserResourcesOnRenderThread_MCEF();
+        }
     }
 
     private void cleanupBrowserResourcesOnRenderThread_MCEF() {
-        if (RenderSystem.isOnRenderThread()) {
-            renderer.cleanup();
-            cursorChangeListener.onCursorChange(0);
+        RenderSystem.assertOnRenderThread();
+        if (rendererCleanupStarted_MCEF || renderOperationDepth_MCEF > 0) {
             return;
         }
-
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft == null || !minecraft.isRunning()) {
-            LOGGER.debug("Skipping browser GL cleanup because the Minecraft render thread is no longer running.");
-            return;
-        }
-
+        rendererCleanupStarted_MCEF = true;
+        Throwable failure = null;
         try {
-            minecraft.submit(() -> {
-                renderer.cleanup();
+            // Cleanup is safe before successful initialization and is required when initialization failed partway.
+            renderer.cleanup();
+        } catch (Throwable cleanupFailure) {
+            failure = cleanupFailure;
+        }
+        try {
+            dragContext.close();
+        } catch (Throwable dragCleanupFailure) {
+            failure = mergeFailure_MCEF(failure, dragCleanupFailure);
+        }
+        try {
+            if (cursorChangeListener != null) {
                 cursorChangeListener.onCursorChange(0);
-            }).join();
-        } catch (Throwable throwable) {
-            LOGGER.warn("Failed to marshal browser cleanup to the render thread.", throwable);
+            }
+        } catch (Throwable cursorFailure) {
+            if (failure == null) {
+                failure = cursorFailure;
+            } else if (failure != cursorFailure) {
+                failure.addSuppressed(cursorFailure);
+            }
+        } finally {
+            MCEFRenderCoordinator.unregister(this);
+        }
+        if (failure != null) {
+            LOGGER.warn("Failed to clean up browser render-thread resources.", failure);
+        }
+    }
+
+    private static void addSuppressed_MCEF(Throwable primaryFailure, Throwable secondaryFailure) {
+        if (primaryFailure != secondaryFailure) {
+            primaryFailure.addSuppressed(secondaryFailure);
+        }
+    }
+
+    private static Throwable mergeFailure_MCEF(Throwable primaryFailure, Throwable secondaryFailure) {
+        if (primaryFailure == null) {
+            return secondaryFailure;
+        }
+        addSuppressed_MCEF(primaryFailure, secondaryFailure);
+        return primaryFailure;
+    }
+
+    private static void rethrowLifecycleFailure_MCEF(Throwable failure) {
+        if (failure instanceof RuntimeException runtimeFailure) {
+            throw runtimeFailure;
+        }
+        if (failure instanceof Error errorFailure) {
+            throw errorFailure;
+        }
+        if (failure != null) {
+            throw new IllegalStateException("Browser lifecycle action failed", failure);
         }
     }
 
     @Override
     protected void finalize() throws Throwable {
-        Minecraft.getInstance().submit(renderer::cleanup);
-        super.finalize();
+        try {
+            requestClose_MCEF();
+        } finally {
+            super.finalize();
+        }
     }
 
     // Cursor handling
     @Override
     public boolean onCursorChange(CefBrowser browser, int cursorType) {
-        cursorType = dragContext.getVirtualCursor(cursorType);
+        return notifyCursorChange_MCEF(browser, dragContext.getVirtualCursor(cursorType));
+    }
+
+    private boolean notifyCursorChange_MCEF(CefBrowser browser, int cursorType) {
         cursorChangeListener.onCursorChange(cursorType);
         return super.onCursorChange(browser, cursorType);
     }
@@ -676,11 +1054,84 @@ public class MCEFBrowser extends CefBrowserOsr {
     }
 
     private static CefCursorType resolveCursorType_MCEF(int cursorTypeId) {
-        CefCursorType[] cursorTypes = CefCursorType.values();
-        if (cursorTypeId < 0 || cursorTypeId >= cursorTypes.length) {
-            return CefCursorType.POINTER;
+        return CefCursorType.fromId(cursorTypeId);
+    }
+
+    @FunctionalInterface
+    private interface DragCompletion_MCEF {
+        boolean complete();
+    }
+
+    private enum PaintSurface_MCEF {
+        VIEW,
+        POPUP;
+
+        private static PaintSurface_MCEF fromPopup(boolean popup) {
+            return popup ? POPUP : VIEW;
         }
-        return cursorTypes[cursorTypeId];
+    }
+
+    private static final class AsyncPaintFrame_MCEF {
+        private final PaintSurface_MCEF surface;
+        private final Rectangle[] dirtyRects;
+        private final ByteBuffer buffer;
+        private final int width;
+        private final int height;
+        private final Rectangle popupRect;
+        private final boolean showPopup;
+        private final long popupStateGeneration;
+        private volatile boolean fullUpload;
+
+        private AsyncPaintFrame_MCEF(PaintSurface_MCEF surface, Rectangle[] dirtyRects, ByteBuffer buffer, int width, int height, Rectangle popupRect, boolean showPopup, long popupStateGeneration) {
+            this.surface = surface;
+            this.dirtyRects = dirtyRects;
+            this.buffer = buffer;
+            this.width = width;
+            this.height = height;
+            this.popupRect = popupRect;
+            this.showPopup = showPopup;
+            this.popupStateGeneration = popupStateGeneration;
+        }
+
+        private PaintSurface_MCEF surface() {
+            return surface;
+        }
+
+        private Rectangle[] dirtyRects() {
+            return dirtyRects;
+        }
+
+        private ByteBuffer buffer() {
+            return buffer;
+        }
+
+        private int width() {
+            return width;
+        }
+
+        private int height() {
+            return height;
+        }
+
+        private Rectangle popupRect() {
+            return popupRect;
+        }
+
+        private boolean showPopup() {
+            return showPopup;
+        }
+
+        private long popupStateGeneration() {
+            return popupStateGeneration;
+        }
+
+        private void requireFullUpload() {
+            fullUpload = true;
+        }
+
+        private boolean requiresFullUpload() {
+            return fullUpload;
+        }
     }
 
 }
