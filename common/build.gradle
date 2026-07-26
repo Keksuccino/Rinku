@@ -18,6 +18,9 @@ dependencies {
     annotationProcessor group: 'org.ow2.asm', name: 'asm-util', version: '9.7'
     compileOnly(annotationProcessor("io.github.llamalad7:mixinextras-common:${mixin_extras_version}"))
     compileOnly group:'org.spongepowered', name:'mixin', version:'0.8.5'
+    testImplementation "org.junit.jupiter:junit-jupiter-api:5.10.2"
+    testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:5.10.2"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher:1.10.2"
 }
 
 sourceSets {
@@ -32,6 +35,18 @@ sourceSets {
         compileClasspath += jcef.output
         runtimeClasspath += jcef.output
     }
+}
+
+dependencies {
+    jcefCompileOnly files("java-cef/third_party/jogamp/jar/gluegen-rt.jar", "java-cef/third_party/jogamp/jar/jogl-all.jar")
+}
+
+configurations.consumable("jcefCompileClasspathElements") {
+    extendsFrom(configurations.getByName(sourceSets.jcef.compileClasspathConfigurationName))
+}
+
+tasks.named("test", Test).configure {
+    useJUnitPlatform()
 }
 
 processResources.dependsOn(processJcefResources)

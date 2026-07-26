@@ -1,4 +1,7 @@
 
+import com.cinemamod.gradle.JcefArchiveProvenance
+import com.cinemamod.gradle.JcefProvenance
+
 plugins {
     // Required for NeoGradle
     id "org.jetbrains.gradle.plugin.idea-ext" version "1.3"
@@ -10,7 +13,7 @@ tasks.named("updateDaemonJvm") {
 }
 
 def getJcefRepoUrl(Project project) {
-    def defaultUrl = "https://github.com/CinemaMod/java-cef.git"
+    def defaultUrl = "https://github.com/Keksuccino/jcef-mcef.git"
     def modulesFile = project.file('.gitmodules')
     if (!modulesFile.exists()) {
         return defaultUrl
@@ -31,43 +34,29 @@ def getJcefRepoUrl(Project project) {
 }
 
 def runGit(Project project, List<String> args, boolean failOnError = true) {
-    def command = ['git'] + args
-    def process = new ProcessBuilder(command)
-            .directory(project.rootDir)
-            .redirectErrorStream(true)
-            .start()
-    def output = process.inputStream.getText('UTF-8')
-    def exitValue = process.waitFor()
-    if (failOnError && exitValue != 0) {
-        throw new GradleException("Git command failed (${command.join(' ')}):\n${output}".trim())
+    try {
+        def result = JcefProvenance.runGit(project.rootDir.toPath(), args, failOnError)
+        return [exitValue: result.exitCode(), output: result.output()]
+    } catch (IllegalStateException exception) {
+        throw new GradleException(exception.message, exception)
     }
-    return [exitValue: exitValue, output: output]
 }
 
 def isTrackedSubmodule(Project project, String submodulePath) {
-    def result = runGit(project, ['ls-files', '--stage', '--', submodulePath], false)
-    if (result.exitValue != 0) {
-        return false
+    try {
+        return JcefProvenance.isTrackedSubmodule(project.rootDir.toPath(), submodulePath)
+    } catch (IllegalStateException exception) {
+        throw new GradleException(exception.message, exception)
     }
-    return result.output.readLines().any { it.startsWith('160000 ') }
 }
 
 tasks.register('syncJcef') {
     doLast {
         def jcefPath = 'common/java-cef'
-        def jcefDir = rootProject.file(jcefPath)
-        def repoUrl = getJcefRepoUrl(rootProject)
-        def jcefGitMetadata = new File(jcefDir, '.git')
         def trackedAsSubmodule = isTrackedSubmodule(rootProject, jcefPath)
 
         if (trackedAsSubmodule) {
             runGit(rootProject, ['submodule', 'sync', '--', jcefPath])
-            return
-        }
-
-        if (jcefGitMetadata.exists()) {
-            runGit(rootProject, ['-C', jcefDir.absolutePath, 'remote', 'set-url', 'origin', repoUrl])
-            return
         }
     }
 }
@@ -78,15 +67,18 @@ tasks.register('cloneJcef') {
         def jcefPath = 'common/java-cef'
         def jcefDir = rootProject.file(jcefPath)
         def repoUrl = getJcefRepoUrl(rootProject)
-        def jcefGitMetadata = new File(jcefDir, '.git')
         def trackedAsSubmodule = isTrackedSubmodule(rootProject, jcefPath)
 
-        if (jcefGitMetadata.exists()) {
+        if (trackedAsSubmodule) {
+            if (!JcefProvenance.hasGitMetadata(jcefDir.toPath())) {
+                runGit(rootProject, ['submodule', 'update', '--init', '--recursive', '--', jcefPath])
+            }
+            // Never move an initialized checkout. Provenance validation below must reject a
+            // mismatched or dirty checkout instead of silently compiling different source.
             return
         }
 
-        if (trackedAsSubmodule) {
-            runGit(rootProject, ['submodule', 'update', '--init', '--recursive', jcefPath])
+        if (JcefProvenance.hasGitMetadata(jcefDir.toPath())) {
             return
         }
 
@@ -102,47 +94,37 @@ tasks.register('cloneJcef') {
     }
 }
 
-// https://gist.github.com/JonasGroeger/7620911
-def getCheckedOutGitCommitHash(Project mcefParent) {
-    def takeFromHash = 40
-    def headCandidates = []
-    def submoduleHead = new File(mcefParent.projectDir, ".git/modules/common/java-cef/HEAD")
-    headCandidates.add(submoduleHead)
-
-    def jcefGitPath = new File(mcefParent.projectDir, "common/java-cef/.git")
-    if (jcefGitPath.isDirectory()) {
-        headCandidates.add(new File(jcefGitPath, "HEAD"))
-    } else if (jcefGitPath.isFile()) {
-        def pointer = jcefGitPath.text.trim()
-        if (pointer.startsWith("gitdir:")) {
-            def gitDirLocation = pointer.substring("gitdir:".length()).trim()
-            headCandidates.add(new File(jcefGitPath.parentFile, "${gitDirLocation}/HEAD"))
+def jcefCommitFile = layout.buildDirectory.file('jcef-provenance/java-cef-commit.txt')
+def capturedJcefCommit = providers.fileContents(jcefCommitFile).asText.map { it.trim() }
+def captureJcefProvenance = tasks.register('captureJcefProvenance') {
+    dependsOn 'cloneJcef'
+    outputs.file(jcefCommitFile)
+    outputs.upToDateWhen { false }
+    doLast {
+        try {
+            def resolution = JcefProvenance.resolve(rootProject.rootDir.toPath(), 'common/java-cef')
+            def outputFile = jcefCommitFile.get().asFile
+            outputFile.parentFile.mkdirs()
+            outputFile.setText("${resolution.commit()}\n", 'UTF-8')
+        } catch (IllegalStateException exception) {
+            throw new GradleException(exception.message, exception)
         }
     }
-
-    for (File gitHeadFile : headCandidates) {
-        if (!gitHeadFile.exists()) {
-            continue
+}
+def revalidateJcefProvenance = {
+    def capturedCommit = capturedJcefCommit.get()
+    try {
+        def current = JcefProvenance.resolve(rootProject.rootDir.toPath(), 'common/java-cef').commit()
+        if (current != capturedCommit) {
+            throw new GradleException("java-cef changed after provenance capture (${capturedCommit} -> ${current}).")
         }
-
-        /*
-         * '.git/HEAD' contains either
-         *      in case of detached head: the currently checked out commit hash
-         *      otherwise: a reference to a file containing the current commit hash
-         */
-        def head = gitHeadFile.text.split(":")
-        def isCommit = head.length == 1
-        if (isCommit) {
-            return head[0].trim().take(takeFromHash)
-        }
-
-        def refHead = new File(gitHeadFile.parentFile, head[1].trim())
-        if (refHead.exists()) {
-            return refHead.text.trim().take(takeFromHash)
-        }
+    } catch (IllegalStateException exception) {
+        throw new GradleException(exception.message, exception)
     }
-
-    return ""
+    return capturedCommit
+}
+def configureJcefArchiveProvenance = { Jar archiveTask ->
+    JcefArchiveProvenance.configure(archiveTask, captureJcefProvenance, jcefCommitFile, revalidateJcefProvenance)
 }
 
 subprojects {
@@ -153,11 +135,19 @@ subprojects {
     java.withSourcesJar()
 //    java.withJavadocJar()
 
-    jar {
-        from(rootProject.file("LICENSE")) {
+    def provenanceArchives = tasks.withType(Jar)
+    provenanceArchives.configureEach { Jar archiveTask ->
+        configureJcefArchiveProvenance(archiveTask)
+    }
+
+    def binaryJar = tasks.named('jar', Jar)
+    def sourceJar = tasks.named('sourcesJar', Jar)
+
+    binaryJar.configure { Jar archiveTask ->
+        archiveTask.from(rootProject.file("LICENSE")) {
             rename { "${it}_${mod_name}" }
         }
-        manifest {
+        archiveTask.manifest {
             attributes([
                     'Specification-Title'     : mod_name,
                     'Specification-Vendor'    : mod_authors,
@@ -166,16 +156,37 @@ subprojects {
                     'Implementation-Version'  : mod_version,
                     'Implementation-Vendor'   : mod_authors,
                     'Built-On-Java'           : "${System.getProperty('java.vm.version')} (${System.getProperty('java.vm.vendor')})",
-                    'Built-On-Minecraft'      : minecraft_version,
-                    'java-cef-commit'         : getCheckedOutGitCommitHash(rootProject)
+                    'Built-On-Minecraft'      : minecraft_version
             ])
         }
     }
 
-    sourcesJar {
-        from(rootProject.file("LICENSE")) {
+    sourceJar.configure { Jar archiveTask ->
+        archiveTask.from(rootProject.file("LICENSE")) {
             rename { "${it}_${mod_name}" }
         }
+    }
+
+    def verifyJcefArchiveProvenance = tasks.register('verifyJcefArchiveProvenance') {
+        dependsOn provenanceArchives
+        inputs.files(provenanceArchives)
+        inputs.file(jcefCommitFile)
+        doLast {
+            def expectedCommit = revalidateJcefProvenance()
+            provenanceArchives.each { archiveTask ->
+                def archiveFile = archiveTask.archiveFile.get().asFile
+                new java.util.jar.JarFile(archiveFile).withCloseable { archive ->
+                    def actualCommit = archive.manifest?.mainAttributes?.getValue('java-cef-commit')
+                    if (actualCommit != expectedCommit) {
+                        throw new GradleException("${archiveFile} records java-cef commit ${actualCommit ?: '<missing>'}; expected ${expectedCommit}.")
+                    }
+                }
+            }
+        }
+    }
+
+    tasks.named('check') {
+        dependsOn verifyJcefArchiveProvenance
     }
 
     repositories {
@@ -312,9 +323,18 @@ subprojects {
     }
 
     tasks.withType(JavaCompile).configureEach {
+        dependsOn captureJcefProvenance
+        // Compiler inputs are checked on both sides of javac so a checkout change cannot leave
+        // bytecode carrying the earlier provenance capture. Archive tasks validate once more.
+        doFirst { revalidateJcefProvenance() }
+        doLast { revalidateJcefProvenance() }
         it.options.encoding = 'UTF-8'
         it.options.getRelease().set(java_version.toInteger())
         it.options.compilerArgs += ['-Xlint:-deprecation', '-Xlint:-removal']
+    }
+
+    tasks.withType(ProcessResources).configureEach {
+        dependsOn captureJcefProvenance
     }
 
     processResources {
@@ -352,4 +372,10 @@ subprojects {
         enabled = false
     }
 
+}
+
+tasks.register('verifyAll') {
+    group = 'verification'
+    description = 'Runs every subproject check; use verify-all.sh or verify-all.bat to include buildSrc tests.'
+    dependsOn subprojects.collect { subproject -> subproject.tasks.named('check') }
 }

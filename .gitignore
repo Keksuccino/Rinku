@@ -2,10 +2,13 @@
 /.gradle/
 /.idea/
 /build/
+/buildSrc/.gradle/
+/buildSrc/build/
 /run_client/
 /run_server/
 /common/.gradle/
 /common/build/
+/common/logs/
 /fabric/.gradle/
 /fabric/build/
 /fabric/run_client/
