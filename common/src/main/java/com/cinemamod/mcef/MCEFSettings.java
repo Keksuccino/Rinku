@@ -29,8 +29,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Properties;
@@ -118,7 +116,7 @@ public class MCEFSettings {
     }
 
     public void setDownloadMirror(String downloadMirror) {
-        this.downloadMirror = parseMirror(downloadMirror, DEFAULT_DOWNLOAD_MIRROR, "download-mirror");
+        this.downloadMirror = parseMirror(downloadMirror, DEFAULT_DOWNLOAD_MIRROR, "download-mirror", downloadMirrorPolicy == MCEFDownloader.MirrorPolicy.CONFIGURED_ONLY);
         saveAsync();
     }
 
@@ -318,7 +316,7 @@ public class MCEFSettings {
 
         Properties properties = new Properties();
         properties.setProperty("skip-download", String.valueOf(skipDownload));
-        properties.setProperty("download-mirror", String.valueOf(downloadMirror));
+        properties.setProperty("download-mirror", downloadMirror == null ? "" : downloadMirror);
         properties.setProperty("download-mirror-policy", downloadMirrorPolicy.name());
         properties.setProperty("enforce-download-checksums", String.valueOf(enforceDownloadChecksums));
         properties.setProperty("download-connect-timeout-ms", String.valueOf(downloadConnectTimeoutMs));
@@ -357,8 +355,8 @@ public class MCEFSettings {
         resetDefaults();
 
         skipDownload = parseBoolean(properties, "skip-download", skipDownload);
-        downloadMirror = parseMirror(properties.getProperty("download-mirror"), downloadMirror, "download-mirror");
         downloadMirrorPolicy = parseMirrorPolicy(properties.getProperty("download-mirror-policy"), downloadMirrorPolicy);
+        downloadMirror = parseMirror(properties.getProperty("download-mirror"), downloadMirror, "download-mirror", downloadMirrorPolicy == MCEFDownloader.MirrorPolicy.CONFIGURED_ONLY);
         enforceDownloadChecksums = parseBoolean(properties, "enforce-download-checksums", enforceDownloadChecksums);
         downloadConnectTimeoutMs = parseInt(properties, "download-connect-timeout-ms", downloadConnectTimeoutMs, 1000, 300_000);
         downloadReadTimeoutMs = parseInt(properties, "download-read-timeout-ms", downloadReadTimeoutMs, 1000, 300_000);
@@ -487,27 +485,27 @@ public class MCEFSettings {
         return value;
     }
 
-    private static String parseMirror(String value, String fallback, String key) {
+    private static String parseMirror(String value, String fallback, String key, boolean requireConfigured) {
         if (value == null || value.isBlank()) {
+            if (requireConfigured) {
+                LOGGER.warn("Missing mcef.properties value for {}; CONFIGURED_ONLY downloads will remain disabled", key);
+                return null;
+            }
             return fallback;
         }
 
-        String trimmed = stripTrailingSlash(value.trim());
-        if (trimmed.equalsIgnoreCase(stripTrailingSlash(MCEFDownloader.LEGACY_OFFICIAL_MIRROR))) {
-            LOGGER.warn("Replacing legacy download mirror {} with {}", MCEFDownloader.LEGACY_OFFICIAL_MIRROR, MCEFDownloader.OFFICIAL_MIRROR);
-            return MCEFDownloader.OFFICIAL_MIRROR;
+        String normalizedOfficialMirror = MCEFDownloader.normalizeOfficialMirror(value.trim());
+        if (!normalizedOfficialMirror.equals(value.trim())) {
+            LOGGER.warn("Migrating the former default JCEF download mirror to the current official mirror");
         }
 
         try {
-            URI uri = new URI(trimmed);
-            if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost() == null) {
-                LOGGER.warn("Invalid mcef.properties value for {}: {}", key, value);
-                return fallback;
-            }
-            return trimmed;
-        } catch (URISyntaxException e) {
-            LOGGER.warn("Invalid mcef.properties value for {}: {}", key, value);
-            return fallback;
+            return MCEFDownloadMirror.parse(normalizedOfficialMirror).externalForm();
+        } catch (IllegalArgumentException failure) {
+            // Never include the rejected value or exception cause in logs. Mirror paths are not
+            // allowed to carry secrets, but malformed legacy configuration may still contain them.
+            LOGGER.warn("Invalid mcef.properties value for {}; the unsafe mirror was ignored", key);
+            return requireConfigured ? null : fallback;
         }
     }
 
@@ -522,11 +520,4 @@ public class MCEFSettings {
         return trimmed;
     }
 
-    private static String stripTrailingSlash(String value) {
-        int end = value.length();
-        while (end > 0 && value.charAt(end - 1) == '/') {
-            end--;
-        }
-        return end == value.length() ? value : value.substring(0, end);
-    }
 }

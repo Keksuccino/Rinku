@@ -26,13 +26,15 @@ import org.cef.CefSettings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFileAttributeView;
 import java.nio.file.attribute.PosixFilePermission;
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.EnumSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -48,37 +50,72 @@ final class CefUtil {
     private static CefApp cefAppInstance;
     private static CefClient cefClientInstance;
 
-    private static void setUnixExecutable(File file) {
-        Set<PosixFilePermission> perms = new HashSet<>();
-        perms.add(PosixFilePermission.OWNER_READ);
-        perms.add(PosixFilePermission.OWNER_WRITE);
-        perms.add(PosixFilePermission.OWNER_EXECUTE);
+    static void addUnixExecutePermissions(Path file) throws IOException {
+        PosixFileAttributeView posixView = Files.getFileAttributeView(file, PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+        if (posixView == null) {
+            addPortableExecutePermissions(file);
+            return;
+        }
 
+        Set<PosixFilePermission> existing = posixView.readAttributes().permissions();
+        Set<PosixFilePermission> updated = EnumSet.noneOf(PosixFilePermission.class);
+        updated.addAll(existing);
+        updated.add(PosixFilePermission.OWNER_EXECUTE);
+        if (existing.contains(PosixFilePermission.GROUP_READ)) {
+            updated.add(PosixFilePermission.GROUP_EXECUTE);
+        }
+        if (existing.contains(PosixFilePermission.OTHERS_READ)) {
+            updated.add(PosixFilePermission.OTHERS_EXECUTE);
+        }
+        posixView.setPermissions(updated);
+    }
+
+    static void addPortableExecutePermissions(Path file) throws IOException {
+        boolean changed;
         try {
-            Files.setPosixFilePermissions(file.toPath(), perms);
-        } catch (IOException e) {
-            LOGGER.error("Failed to set " + file + " as executable.", e);
+            changed = file.toFile().setExecutable(true, false);
+        } catch (SecurityException | UnsupportedOperationException failure) {
+            throw new IOException("Could not set executable permissions on " + file, failure);
+        }
+        if (!Files.isExecutable(file)) {
+            throw new IOException("Could not set executable permissions on " + file + "; File.setExecutable returned " + changed);
+        }
+    }
+
+    static List<Path> unixExecutablePaths(Path installation, MCEFPlatform platform) {
+        if (platform.isLinux()) {
+            return List.of(installation.resolve("jcef_helper"), installation.resolve("chrome-sandbox"));
+        }
+        if (!platform.isMacOS()) {
+            return List.of();
+        }
+        Path contents = installation.resolve("jcef_app.app/Contents");
+        Path frameworks = contents.resolve("Frameworks");
+        return List.of(contents.resolve("MacOS/JavaAppLauncher"), frameworks.resolve("Chromium Embedded Framework.framework/Chromium Embedded Framework"), frameworks.resolve("jcef Helper.app/Contents/MacOS/jcef Helper"), frameworks.resolve("jcef Helper (Alerts).app/Contents/MacOS/jcef Helper (Alerts)"), frameworks.resolve("jcef Helper (GPU).app/Contents/MacOS/jcef Helper (GPU)"), frameworks.resolve("jcef Helper (Plugin).app/Contents/MacOS/jcef Helper (Plugin)"), frameworks.resolve("jcef Helper (Renderer).app/Contents/MacOS/jcef Helper (Renderer)"));
+    }
+
+    private static void ensureUnixExecutables(Path installation, MCEFPlatform platform) {
+        for (Path file : unixExecutablePaths(installation, platform)) {
+            try {
+                addUnixExecutePermissions(file);
+            } catch (IOException e) {
+                LOGGER.error("Failed to set " + file + " as executable.", e);
+            }
         }
     }
 
     static boolean init() {
         MCEFPlatform platform = MCEFPlatform.getPlatform();
-
-        // Ensure binaries are executable
-        if (platform.isLinux()) {
-            File jcefHelperFile = new File(System.getProperty("mcef.libraries.path"), platform.getNormalizedName() + "/jcef_helper");
-            setUnixExecutable(jcefHelperFile);
-        } else if (platform.isMacOS()) {
-            File mcefLibrariesPath = new File(System.getProperty("mcef.libraries.path"));
-            File jcefHelperFile = new File(mcefLibrariesPath, platform.getNormalizedName() + "/jcef_app.app/Contents/Frameworks/jcef Helper.app/Contents/MacOS/jcef Helper");
-            File jcefHelperGPUFile = new File(mcefLibrariesPath, platform.getNormalizedName() + "/jcef_app.app/Contents/Frameworks/jcef Helper (GPU).app/Contents/MacOS/jcef Helper (GPU)");
-            File jcefHelperPluginFile = new File(mcefLibrariesPath, platform.getNormalizedName() + "/jcef_app.app/Contents/Frameworks/jcef Helper (Plugin).app/Contents/MacOS/jcef Helper (Plugin)");
-            File jcefHelperRendererFile = new File(mcefLibrariesPath, platform.getNormalizedName() + "/jcef_app.app/Contents/Frameworks/jcef Helper (Renderer).app/Contents/MacOS/jcef Helper (Renderer)");
-            setUnixExecutable(jcefHelperFile);
-            setUnixExecutable(jcefHelperGPUFile);
-            setUnixExecutable(jcefHelperPluginFile);
-            setUnixExecutable(jcefHelperRendererFile);
+        String configuredJcefPath = System.getProperty("jcef.path");
+        if (configuredJcefPath == null || configuredJcefPath.isBlank()) {
+            LOGGER.error("JCEF installation path is unavailable; the downloader must finish before CEF initialization.");
+            return false;
         }
+        Path jcefInstallation = Path.of(configuredJcefPath);
+
+        // Archive modes are canonicalized during extraction. This remains a non-destructive fallback
+        // for installations copied by tools that discarded executable bits.
+        ensureUnixExecutables(jcefInstallation, platform);
 
         MCEFSettings settings = MCEF.getSettings();
         ArrayList<String> cefSwitchesList = new ArrayList<>();

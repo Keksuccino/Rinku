@@ -21,10 +21,8 @@ import java.io.IOException;
  * mcef.libraries.path is where MCEF will store any required binaries. By default,
  * /path/to/.minecraft/mods/mcef-libraries.
  * <p>
- * jcef.path is the location of the standard java-cef bundle. By default,
- * /path/to/mcef-libraries/<normalized platform name> where normalized platform name comes from
- * {@link MCEFPlatform#getNormalizedName()}. This is what java-cef uses internally to find the
- * installation. Also see {@link org.cef.CefApp}.
+ * jcef.path is resolved after recovery to one immutable, content-addressed java-cef generation.
+ * This is what java-cef uses internally to find the installation. Also see {@link org.cef.CefApp}.
  */
 @Mixin(ClientPackSource.class)
 public class MixinClientPackSource {
@@ -63,10 +61,8 @@ public class MixinClientPackSource {
             mcefLibrariesDir = new File("mods/mcef-libraries/");
         }
 
-        mcefLibrariesDir.mkdirs();
-
+        java.nio.file.Files.createDirectories(mcefLibrariesDir.toPath());
         System.setProperty("mcef.libraries.path", mcefLibrariesDir.getCanonicalPath());
-        System.setProperty("jcef.path", new File(mcefLibrariesDir, MCEFPlatform.getPlatform().getNormalizedName()).getCanonicalPath());
     }
 
     @Unique
@@ -77,51 +73,9 @@ public class MixinClientPackSource {
 
             MCEFSettings settings = MCEF.getSettings();
             MCEFPlatform platform = MCEFPlatform.getPlatform();
-            MCEFDownloader downloader = new MCEFDownloader(
-                    settings.getDownloadMirror(),
-                    javaCefCommit,
-                    platform,
-                    settings.createDownloadPolicy()
-            );
-
-            File mcefLibrariesDir = new File(System.getProperty("mcef.libraries.path"));
-            File platformLibrariesDir = new File(mcefLibrariesDir, platform.getNormalizedName());
-            boolean hasPlatformLibrariesDir = platformLibrariesDir.exists() && platformLibrariesDir.isDirectory();
-
-            if (settings.isSkipDownload()) {
-                if (!hasPlatformLibrariesDir) {
-                    failDownload_MCEF("skip-download=true but local MCEF libraries are missing", null);
-                    return;
-                }
-                MCEFDownloadListener.INSTANCE.setDone(true);
-                return;
-            }
-
-            boolean hasChecksumResult = false;
-            boolean checksumMatches = false;
-            try {
-                checksumMatches = downloader.downloadJavaCefChecksum();
-                hasChecksumResult = true;
-            } catch (IOException e) {
-                if (settings.isEnforceDownloadChecksums()) {
-                    failDownload_MCEF("Failed to download JCEF checksum", e);
-                    return;
-                }
-                LOGGER.warn("Failed to download JCEF checksum with checksum enforcement disabled", e);
-            }
-
-            boolean downloadJcefBuild = !hasPlatformLibrariesDir || (hasChecksumResult && !checksumMatches);
-
-            if (downloadJcefBuild) {
-                try {
-                    downloader.downloadJavaCefBuild();
-                    downloader.extractJavaCefBuild(true);
-                } catch (IOException e) {
-                    failDownload_MCEF("Failed to download or extract JCEF", e);
-                    return;
-                }
-            }
-
+            MCEFDownloader downloader = new MCEFDownloader(settings.getDownloadMirror(), javaCefCommit, platform, settings.createDownloadPolicy());
+            MCEFDownloader.InstallationResult installation = downloader.installOrUpdate(settings.isSkipDownload(), true);
+            System.setProperty("jcef.path", installation.installationDirectory().toRealPath().toString());
             MCEFDownloadListener.INSTANCE.setDone(true);
         } catch (IOException e) {
             failDownload_MCEF("Failed to initialize JCEF downloader", e);

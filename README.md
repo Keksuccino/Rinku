@@ -59,13 +59,19 @@ To run the NeoForge client: `./gradlew neoforgeClient`
 
 In-game, there is a demo browser if you press F12 after you're loaded into a world (the demo browser only exists when you're running from a development environment).
 
+### JCEF mirror and checksum trust
+
+MCEF binds every checksum-verified immutable JCEF generation to the endpoint that supplied its checksum. The official endpoint is recorded as `official`; configured endpoints are recorded only as a SHA-256 identifier derived from their canonical URI, so private mirror paths are not persisted in generation metadata. A cached generation is reused only while its recorded source remains allowed by the active mirror policy. When a policy or source change excludes that recorded source—for example, moving a configured-source generation to `OFFICIAL_ONLY` or changing a `CONFIGURED_ONLY` mirror—MCEF requires a checksum fetch from an allowed endpoint before the same runtime can be reused. An official fallback generation created under `PREFER_CONFIGURED` remains eligible under `OFFICIAL_ONLY`.
+
+The `.sha256` file establishes that an archive matches the digest supplied by the selected endpoint. It is an integrity check, not an independent publisher signature or authentication mechanism. Legacy generation metadata that predates source binding is re-verified online before reuse; `skip-download=true` requires an existing checksum-verified generation from a source allowed by the current policy.
+
 ## Clearing MCEF Cache
 
 MCEF skips the downloader screen once it detects that all required files are present. Remove the following paths to force a fresh download and clean browser data:
 
 - **Binary bundle (production builds):** `<game directory>/mods/mcef-libraries`
 - **Binary bundle (development runs):** `<repo>/fabric/build/mcef-libraries` or `<repo>/neoforge/build/mcef-libraries` (the folder next to the active module's `build` directory)
-- **Checksum files:** any `<platform>.tar.gz.sha256` inside the relevant `mcef-libraries` folder; removing these alongside the binaries guarantees the downloader runs again
+- **Immutable JCEF generations:** hidden `.<platform>.mcef-generations` and `.<platform>.mcef-current.properties` paths inside the relevant `mcef-libraries` folder. Removing the complete `mcef-libraries` folder clears generations, transaction recovery metadata, retained archives, and compatibility checksums together.
 - **JCEF profile/cache:** `<game directory>/mods/mcef-cache`
 - **Config overrides:** `<game directory>/config/mcef/mcef.properties` (delete or edit this file if it sets `skip-download=true`)
 

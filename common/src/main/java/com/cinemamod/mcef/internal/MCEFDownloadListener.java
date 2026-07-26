@@ -27,10 +27,13 @@ public class MCEFDownloadListener {
     @Unique
     public static final MCEFDownloadListener INSTANCE = new MCEFDownloadListener();
 
-    private String task;
-    private float percent;
-    private boolean done;
-    private boolean failed;
+    // The installer runs on MCEF-Downloader while the render thread polls this state. Volatile
+    // publication keeps progress and the terminal state visible without tying either thread to a
+    // UI lock during network and extraction work.
+    private volatile String task;
+    private volatile float percent;
+    private volatile boolean done;
+    private volatile boolean failed;
 
     public void setTask(String name) {
         this.task = name;
