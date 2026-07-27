@@ -1,7 +1,7 @@
 {
   "required": true,
   "minVersion": "0.8",
-  "package": "com.cinemamod.mcef.mixins.neoforge",
+  "package": "de.keksuccino.mcef.mixins.neoforge",
   "compatibilityLevel": "JAVA_17",
   "mixins": [
   ],

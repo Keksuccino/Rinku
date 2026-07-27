@@ -54,7 +54,7 @@ public class MCEFClient implements CefLoadHandler, CefContextMenuHandler, CefDis
     private final List<CefContextMenuHandler> contextMenuHandlers = new CopyOnWriteArrayList<>();
     private final List<CefDisplayHandler> displayHandlers = new CopyOnWriteArrayList<>();
     private final List<CefAudioHandler> audioHandlers = new CopyOnWriteArrayList<>();
-    private final List<CefDownloadHandler> downloadHandlers = new CopyOnWriteArrayList<>();
+    private final MCEFDownloadHandlerRelay downloadHandlerRelay = new MCEFDownloadHandlerRelay();
 
     public MCEFClient(CefClient cefClient) {
         handle = cefClient;
@@ -215,25 +215,28 @@ public class MCEFClient implements CefLoadHandler, CefContextMenuHandler, CefDis
     }
 
     public void addDownloadHandler(CefDownloadHandler handler) {
-        downloadHandlers.add(handler);
+        downloadHandlerRelay.addHandler(handler);
     }
 
     @Override
+    public boolean canDownload(CefBrowser browser, String url, String requestMethod) {
+        return downloadHandlerRelay.canDownload(browser, url, requestMethod);
+    }
+
+    @Override
+    @Deprecated
     public void onBeforeDownload(CefBrowser browser, CefDownloadItem downloadItem, String suggestedName, CefBeforeDownloadCallback callback) {
-        if (downloadHandlers.isEmpty()) {
-            // Open the native Save As dialog. Canceling the dialog cancels the download.
-            callback.Continue(suggestedName == null ? "" : suggestedName, true);
-            return;
-        }
-        downloadHandlers.get(0).onBeforeDownload(browser, downloadItem, suggestedName, callback);
+        downloadHandlerRelay.onBeforeDownload(browser, downloadItem, suggestedName, callback);
+    }
+
+    @Override
+    public boolean onBeforeDownloadWithDecision(CefBrowser browser, CefDownloadItem downloadItem, String suggestedName, CefBeforeDownloadCallback callback) {
+        return downloadHandlerRelay.onBeforeDownloadWithDecision(browser, downloadItem, suggestedName, callback);
     }
 
     @Override
     public void onDownloadUpdated(CefBrowser browser, CefDownloadItem downloadItem, CefDownloadItemCallback callback) {
-        if (downloadHandlers.isEmpty()) {
-            return;
-        }
-        downloadHandlers.get(0).onDownloadUpdated(browser, downloadItem, callback);
+        downloadHandlerRelay.onDownloadUpdated(browser, downloadItem, callback);
     }
 
     private static boolean shouldForwardConsoleMessageToMcLog_MCEF(CefSettings.LogSeverity level) {

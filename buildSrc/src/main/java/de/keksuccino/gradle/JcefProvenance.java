@@ -23,11 +23,16 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public final class JcefProvenance {
+    // Build setup may clone the complete JCEF repository, so allow network-bound Git operations
+    // substantially longer than local provenance reads while still preventing an infinite hang.
+    private static final long GIT_PROCESS_TIMEOUT_SECONDS = 300;
+    private static final long GIT_OUTPUT_READER_TIMEOUT_SECONDS = 10;
     private static final Pattern COMMIT_PATTERN = Pattern.compile("^(?:[0-9a-f]{40}|[0-9a-f]{64})$");
     private static final Pattern INDEX_ENTRY_PATTERN = Pattern.compile("^(\\d{6}) ([0-9a-f]{40}|[0-9a-f]{64}) ([0-3])\\t([\\s\\S]+)$");
     private static final Pattern SHARED_INDEX_NAME_PATTERN = Pattern.compile("^sharedindex\\.(?:[0-9a-f]{40}|[0-9a-f]{64})$");
@@ -101,23 +106,25 @@ public final class JcefProvenance {
         sanitizeGitEnvironment(processBuilder.environment());
         processBuilder.environment().putAll(environmentOverrides);
 
+        Process process = null;
+        Thread outputReader = null;
         try {
-            Process process = processBuilder.start();
-            String output;
-            try (var input = process.getInputStream()) {
-                output = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+            process = processBuilder.start();
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            AtomicReference<IOException> readFailure = new AtomicReference<>();
+            outputReader = startGitOutputReader(process, output, readFailure, Integer.MAX_VALUE, "MCEF-Git-Output");
+            int exitCode = awaitGitProcess(process, outputReader, command);
+            if (readFailure.get() != null) {
+                throw new IllegalStateException("Failed to read Git command output: " + String.join(" ", command), readFailure.get());
             }
-            int exitCode = process.waitFor();
-            GitResult result = new GitResult(exitCode, output);
+            GitResult result = new GitResult(exitCode, output.toString(StandardCharsets.UTF_8));
             if (failOnError && exitCode != 0) {
                 throw gitFailure(command, result);
             }
             return result;
         } catch (IOException e) {
+            if (process != null && outputReader != null) terminateGitProcess(process, outputReader);
             throw new IllegalStateException("Failed to execute Git command: " + String.join(" ", command), e);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("Interrupted while executing Git command: " + String.join(" ", command), e);
         }
     }
 
@@ -132,33 +139,20 @@ public final class JcefProvenance {
         sanitizeGitEnvironment(processBuilder.environment());
         processBuilder.environment().putAll(environmentOverrides);
 
+        Process process = null;
+        Thread outputReader = null;
         try {
-            Process process = processBuilder.start();
+            process = processBuilder.start();
             ByteArrayOutputStream output = new ByteArrayOutputStream();
             AtomicReference<IOException> readFailure = new AtomicReference<>();
-            Thread outputReader = Thread.ofVirtual().name("MCEF-Git-Binary-Output").start(() -> {
-                try (var processOutput = process.getInputStream()) {
-                    byte[] buffer = new byte[8192];
-                    int count;
-                    while ((count = processOutput.read(buffer)) != -1) {
-                        if ((long) output.size() + count > maximumOutputBytes) {
-                            throw new IOException("Git command output exceeds the provenance limit.");
-                        }
-                        output.write(buffer, 0, count);
-                    }
-                } catch (IOException e) {
-                    readFailure.set(e);
-                    process.destroyForcibly();
-                }
-            });
+            outputReader = startGitOutputReader(process, output, readFailure, maximumOutputBytes, "MCEF-Git-Binary-Output");
             try (var processInput = process.getOutputStream()) {
                 processInput.write(input);
             } catch (IOException e) {
-                process.destroyForcibly();
+                terminateGitProcess(process, outputReader);
                 throw new IllegalStateException("Failed to write Git command input: " + String.join(" ", command), e);
             }
-            int exitCode = process.waitFor();
-            outputReader.join();
+            int exitCode = awaitGitProcess(process, outputReader, command);
             if (readFailure.get() != null) {
                 throw new IllegalStateException("Failed to read Git command output: " + String.join(" ", command), readFailure.get());
             }
@@ -168,11 +162,67 @@ public final class JcefProvenance {
             }
             return result;
         } catch (IOException e) {
+            if (process != null && outputReader != null) terminateGitProcess(process, outputReader);
             throw new IllegalStateException("Failed to execute Git command: " + String.join(" ", command), e);
+        }
+    }
+
+    private static Thread startGitOutputReader(Process process, ByteArrayOutputStream output, AtomicReference<IOException> readFailure, int maximumOutputBytes, String threadName) {
+        // Keep process-pipe reads off virtual carriers. Java 25/macOS can otherwise deadlock a
+        // pinned pipe read against ProcessReaper after Git has already exited.
+        return Thread.ofPlatform().daemon(true).name(threadName).start(() -> {
+            try (var processOutput = process.getInputStream()) {
+                byte[] buffer = new byte[8192];
+                int count;
+                while ((count = processOutput.read(buffer)) != -1) {
+                    if ((long) output.size() + count > maximumOutputBytes) {
+                        throw new IOException("Git command output exceeds the provenance limit.");
+                    }
+                    output.write(buffer, 0, count);
+                }
+            } catch (IOException e) {
+                readFailure.set(e);
+                process.destroyForcibly();
+            }
+        });
+    }
+
+    private static int awaitGitProcess(Process process, Thread outputReader, List<String> command) {
+        try {
+            if (!process.waitFor(GIT_PROCESS_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                terminateGitProcess(process, outputReader);
+                throw new IllegalStateException("Timed out while executing Git command: " + String.join(" ", command));
+            }
+            outputReader.join(TimeUnit.SECONDS.toMillis(GIT_OUTPUT_READER_TIMEOUT_SECONDS));
+            if (outputReader.isAlive()) {
+                terminateGitProcess(process, outputReader);
+                throw new IllegalStateException("Timed out while reading Git command output: " + String.join(" ", command));
+            }
+            return process.exitValue();
         } catch (InterruptedException e) {
+            terminateGitProcess(process, outputReader);
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Interrupted while executing Git command: " + String.join(" ", command), e);
         }
+    }
+
+    private static void terminateGitProcess(Process process, Thread outputReader) {
+        process.destroyForcibly();
+        // Interrupt alone does not reliably wake a platform thread blocked in a native pipe read.
+        // Closing every process stream makes timeout and interruption cleanup deterministic.
+        try {
+            process.getInputStream().close();
+        } catch (IOException ignored) {
+        }
+        try {
+            process.getErrorStream().close();
+        } catch (IOException ignored) {
+        }
+        try {
+            process.getOutputStream().close();
+        } catch (IOException ignored) {
+        }
+        outputReader.interrupt();
     }
 
     static void sanitizeGitEnvironment(Map<String, String> environment) {

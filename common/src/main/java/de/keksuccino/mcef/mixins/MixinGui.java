@@ -66,7 +66,7 @@ public abstract class MixinGui {
 
     @Inject(method = "setScreen", at = @At("HEAD"), cancellable = true)
     public void before_setScreen_MCEF(@Nullable Screen screen, CallbackInfo info) {
-        if (MCEF.isInitialized()) {
+        if (!MCEF.isInitializationAllowed()) {
             return;
         }
 
@@ -81,13 +81,16 @@ public abstract class MixinGui {
             if (MCEFDownloadListener.INSTANCE.isDone() && !MCEFDownloadListener.INSTANCE.isFailed()) {
                 LOGGER_MCEF.debug("MCEF already finished downloading, scheduling loading.");
                 Minecraft.getInstance().execute(() -> {
+                    if (!MCEF.isInitializationAllowed()) return;
                     LOGGER_MCEF.debug("MCEF is attempting to load.");
                     try {
                         Thread.sleep(1000);
                     } catch (InterruptedException e) {
-                        LOGGER_MCEF.error("I don't even know what occurred here.", e);
+                        Thread.currentThread().interrupt();
+                        LOGGER_MCEF.warn("Interrupted while waiting to initialize MCEF.", e);
+                        return;
                     }
-                    MCEF.initialize();
+                    if (MCEF.isInitializationAllowed()) MCEF.initialize();
                 });
             } else if (!MCEFDownloadListener.INSTANCE.isDone() && !MCEFDownloadListener.INSTANCE.isFailed()) {
                 LOGGER_MCEF.debug("MCEF has not finished loading, displaying loading screen.");

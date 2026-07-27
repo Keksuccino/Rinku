@@ -4,11 +4,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.FileTime;
 import java.nio.file.attribute.PosixFilePermission;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,6 +24,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class JcefProvenanceTest {
@@ -39,6 +42,19 @@ class JcefProvenanceTest {
 
         assertEquals(fixture.jcefCommit(), resolution.commit());
         assertTrue(resolution.trackedSubmodule());
+    }
+
+    @Test
+    void repeatedTextAndBinaryGitCommandsDrainWithoutHanging() {
+        assertTimeoutPreemptively(Duration.ofSeconds(30), () -> {
+            JcefProvenance.runGit(temporaryDirectory, List.of("init", "--quiet"), true);
+            for (int i = 0; i < 24; i++) {
+                JcefProvenance.GitResult textResult = JcefProvenance.runGit(temporaryDirectory, List.of("rev-parse", "--git-dir"), true);
+                JcefProvenance.GitBinaryResult binaryResult = JcefProvenance.runGitBinary(temporaryDirectory, List.of("hash-object", "--stdin"), "mcef".getBytes(StandardCharsets.UTF_8), true, Map.of(), 128);
+                assertEquals(".git", textResult.output().trim());
+                assertTrue(binaryResult.output().length > 0);
+            }
+        });
     }
 
     @Test

@@ -26,6 +26,9 @@ dependencies {
     add("commonJcefCompileDependencies", project(path: ":common", configuration: "jcefCompileClasspathElements"))
     include(implementation(annotationProcessor("io.github.llamalad7:mixinextras-fabric:${mixin_extras_version}")))
     implementation "maven.modrinth:modmenu:20.0.0-beta.4"
+    testImplementation "org.junit.jupiter:junit-jupiter-api:5.10.2"
+    testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:5.10.2"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher:1.10.2"
 
 }
 
@@ -53,7 +56,7 @@ loom {
     }
 }
 
-tasks.withType(JavaCompile).configureEach {
+tasks.named("compileJava", JavaCompile).configure {
     source(project(":common").sourceSets.main.allSource)
     source(commonJcefSourceSet.allSource)
     classpath += commonJcefCompileClasspath.get()
@@ -62,6 +65,7 @@ tasks.withType(Javadoc).configureEach {
     source(project(":common").sourceSets.main.allJava)
 }
 tasks.withType(Test).configureEach {
+    useJUnitPlatform()
     // Allow builds when there are test sources but no matching tests.
     failOnNoDiscoveredTests = false
 }

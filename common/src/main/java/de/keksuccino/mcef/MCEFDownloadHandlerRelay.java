@@ -1,0 +1,81 @@
+/*
+ *     MCEF (Minecraft Chromium Embedded Framework)
+ *     Copyright (C) 2023 CinemaMod Group
+ *
+ *     This library is free software; you can redistribute it and/or
+ *     modify it under the terms of the GNU Lesser General Public
+ *     License as published by the Free Software Foundation; either
+ *     version 2.1 of the License, or (at your option) any later version.
+ *
+ *     This library is distributed in the hope that it will be useful,
+ *     but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ *     Lesser General Public License for more details.
+ *
+ *     You should have received a copy of the GNU Lesser General Public
+ *     License along with this library; if not, write to the Free Software
+ *     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301
+ *     USA
+ */
+
+package de.keksuccino.mcef;
+
+import org.cef.browser.CefBrowser;
+import org.cef.callback.CefBeforeDownloadCallback;
+import org.cef.callback.CefDownloadItem;
+import org.cef.callback.CefDownloadItemCallback;
+import org.cef.handler.CefDownloadHandler;
+
+import java.util.concurrent.atomic.AtomicReference;
+
+/**
+ * Relays download callbacks to the first registered owner.
+ *
+ * <p>Download callbacks transfer ownership of one-shot continuation objects, so broadcasting them
+ * would allow multiple handlers to complete the same callback. The atomic first-writer-wins slot
+ * also makes handlers registered outside CEF's UI thread safely visible to native callbacks.
+ */
+final class MCEFDownloadHandlerRelay implements CefDownloadHandler {
+    private final AtomicReference<CefDownloadHandler> handler = new AtomicReference<>();
+
+    void addHandler(CefDownloadHandler handler) {
+        if (handler != null) this.handler.compareAndSet(null, handler);
+    }
+
+    @Override
+    public boolean canDownload(CefBrowser browser, String url, String requestMethod) {
+        CefDownloadHandler currentHandler = handler.get();
+        return currentHandler == null || currentHandler.canDownload(browser, url, requestMethod);
+    }
+
+    @Override
+    @Deprecated
+    public void onBeforeDownload(CefBrowser browser, CefDownloadItem downloadItem, String suggestedName, CefBeforeDownloadCallback callback) {
+        CefDownloadHandler currentHandler = handler.get();
+        if (currentHandler == null) {
+            continueWithSaveDialog(suggestedName, callback);
+            return;
+        }
+        currentHandler.onBeforeDownload(browser, downloadItem, suggestedName, callback);
+    }
+
+    @Override
+    public boolean onBeforeDownloadWithDecision(CefBrowser browser, CefDownloadItem downloadItem, String suggestedName, CefBeforeDownloadCallback callback) {
+        CefDownloadHandler currentHandler = handler.get();
+        if (currentHandler != null) return currentHandler.onBeforeDownloadWithDecision(browser, downloadItem, suggestedName, callback);
+        continueWithSaveDialog(suggestedName, callback);
+        return true;
+    }
+
+    @Override
+    public void onDownloadUpdated(CefBrowser browser, CefDownloadItem downloadItem, CefDownloadItemCallback callback) {
+        CefDownloadHandler currentHandler = handler.get();
+        if (currentHandler != null) currentHandler.onDownloadUpdated(browser, downloadItem, callback);
+    }
+
+    private static void continueWithSaveDialog(String suggestedName, CefBeforeDownloadCallback callback) {
+        // Passing true preserves MCEF's established Save As behavior; canceling the dialog cancels
+        // the download while still satisfying CEF's one-owner callback contract.
+        callback.Continue(suggestedName == null ? "" : suggestedName, true);
+    }
+}

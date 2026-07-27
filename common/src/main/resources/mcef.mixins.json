@@ -1,15 +1,15 @@
 {
   "required": true,
   "minVersion": "0.8",
-  "package": "com.cinemamod.mcef.mixins",
+  "package": "de.keksuccino.mcef.mixins",
   "compatibilityLevel": "JAVA_17",
   "mixins": [
   ],
   "client": [
-    "de.cinemamod.mcef.mixins.MixinClientPackSource",
-    "de.cinemamod.mcef.mixins.MixinGui",
-    "de.cinemamod.mcef.mixins.MixinMinecraft",
-    "de.cinemamod.mcef.mixins.MixinGameRenderer"
+    "MixinClientPackSource",
+    "MixinGui",
+    "MixinMinecraft",
+    "MixinGameRenderer"
   ],
   "injectors": {
     "defaultRequire": 1

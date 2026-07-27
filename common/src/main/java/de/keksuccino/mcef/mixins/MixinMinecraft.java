@@ -1,5 +1,6 @@
 package de.keksuccino.mcef.mixins;
 
+import de.keksuccino.mcef.MCEF;
 import de.keksuccino.mcef.MCEFPlatform;
 import de.keksuccino.mcef.MCEFRenderCoordinator;
 import net.minecraft.client.Minecraft;
@@ -37,6 +38,7 @@ public abstract class MixinMinecraft {
     @Inject(method = "close", at = @At("HEAD"))
     private void before_close_MCEF(CallbackInfo info) {
         MCEFRenderCoordinator.shutdownOnRenderThread();
+        MCEF.shutdown();
     }
 
     /**

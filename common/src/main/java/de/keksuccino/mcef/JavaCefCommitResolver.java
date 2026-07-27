@@ -562,7 +562,10 @@ final class JavaCefCommitResolver {
         Process process = processBuilder.start();
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         AtomicReference<IOException> readFailure = new AtomicReference<>();
-        Thread outputReader = Thread.ofVirtual().name("MCEF-Git-Output").start(() -> {
+        // A virtual reader can deadlock with ProcessReaper on Java 25/macOS when the child exits
+        // while ProcessPipeInputStream is pinned in a native read. A daemon platform thread lets
+        // the operating-system pipe reach EOF normally and is bounded again below.
+        Thread outputReader = Thread.ofPlatform().daemon(true).name("MCEF-Git-Output").start(() -> {
             try (var input = process.getInputStream()) {
                 input.transferTo(output);
             } catch (IOException e) {
@@ -573,14 +576,10 @@ final class JavaCefCommitResolver {
         boolean finished;
         try {
             finished = process.waitFor(GIT_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-            if (!finished) {
-                process.destroyForcibly();
-                process.waitFor();
-            }
-            outputReader.join();
+            if (!finished) terminateGitProcess(process, outputReader);
+            else awaitOutputReader(process, outputReader);
         } catch (InterruptedException e) {
-            process.destroyForcibly();
-            outputReader.interrupt();
+            terminateGitProcess(process, outputReader);
             Thread.currentThread().interrupt();
             throw new IOException("Interrupted while resolving java-cef Git provenance.", e);
         }
@@ -614,7 +613,7 @@ final class JavaCefCommitResolver {
         Process process = processBuilder.start();
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         AtomicReference<IOException> readFailure = new AtomicReference<>();
-        Thread outputReader = Thread.ofVirtual().name("MCEF-Git-Binary-Output").start(() -> {
+        Thread outputReader = Thread.ofPlatform().daemon(true).name("MCEF-Git-Binary-Output").start(() -> {
             try (var processOutput = process.getInputStream()) {
                 byte[] buffer = new byte[8192];
                 int count;
@@ -633,22 +632,17 @@ final class JavaCefCommitResolver {
         try (var processInput = process.getOutputStream()) {
             processInput.write(input);
         } catch (IOException e) {
-            process.destroyForcibly();
-            outputReader.interrupt();
+            terminateGitProcess(process, outputReader);
             throw new IOException("Failed to write Git input while resolving java-cef provenance.", e);
         }
 
         boolean finished;
         try {
             finished = process.waitFor(GIT_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-            if (!finished) {
-                process.destroyForcibly();
-                process.waitFor();
-            }
-            outputReader.join();
+            if (!finished) terminateGitProcess(process, outputReader);
+            else awaitOutputReader(process, outputReader);
         } catch (InterruptedException e) {
-            process.destroyForcibly();
-            outputReader.interrupt();
+            terminateGitProcess(process, outputReader);
             Thread.currentThread().interrupt();
             throw new IOException("Interrupted while resolving java-cef Git provenance.", e);
         }
@@ -666,6 +660,32 @@ final class JavaCefCommitResolver {
             throw new IOException("Git command failed while resolving java-cef provenance" + (detail.isEmpty() ? "." : ": " + detail));
         }
         return result;
+    }
+
+    private static void awaitOutputReader(Process process, Thread outputReader) throws IOException, InterruptedException {
+        outputReader.join(TimeUnit.SECONDS.toMillis(GIT_TIMEOUT_SECONDS));
+        if (!outputReader.isAlive()) return;
+        terminateGitProcess(process, outputReader);
+        throw new IOException("Timed out while reading Git output for java-cef provenance.");
+    }
+
+    private static void terminateGitProcess(Process process, Thread outputReader) {
+        process.destroyForcibly();
+        // Interrupt alone does not reliably wake a platform thread blocked in a native pipe read.
+        // Closing every process stream makes timeout and interruption cleanup deterministic.
+        try {
+            process.getInputStream().close();
+        } catch (IOException ignored) {
+        }
+        try {
+            process.getErrorStream().close();
+        } catch (IOException ignored) {
+        }
+        try {
+            process.getOutputStream().close();
+        } catch (IOException ignored) {
+        }
+        outputReader.interrupt();
     }
 
     private static void sanitizeGitEnvironment(Map<String, String> environment) {

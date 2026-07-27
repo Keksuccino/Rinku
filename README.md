@@ -8,7 +8,7 @@ MCEF is a mod and library for adding the Chromium web browser into Minecraft.
 
 **Support & Discussion:** https://discord.gg/rhayah27GC
 
-**Current Chromium version:** `116.0.5845.190`
+**Current Chromium version:** `151.0.7922.34`
 
 ## Supported Platforms
 
@@ -70,7 +70,7 @@ The `.sha256` file establishes that an archive matches the digest supplied by th
 MCEF skips the downloader screen once it detects that all required files are present. Remove the following paths to force a fresh download and clean browser data:
 
 - **Binary bundle (production builds):** `<game directory>/mods/mcef-libraries`
-- **Binary bundle (development runs):** `<repo>/fabric/build/mcef-libraries` or `<repo>/neoforge/build/mcef-libraries` (the folder next to the active module's `build` directory)
+- **Binary bundle (development runs):** `<repo>/fabric/build/mcef-libraries` for Fabric or `<repo>/build/mcef-libraries` for NeoForge
 - **Immutable JCEF generations:** hidden `.<platform>.mcef-generations` and `.<platform>.mcef-current.properties` paths inside the relevant `mcef-libraries` folder. Removing the complete `mcef-libraries` folder clears generations, transaction recovery metadata, retained archives, and compatibility checksums together.
 - **JCEF profile/cache:** `<game directory>/mods/mcef-cache`
 - **Config overrides:** `<game directory>/config/mcef/mcef.properties` (delete or edit this file if it sets `skip-download=true`)

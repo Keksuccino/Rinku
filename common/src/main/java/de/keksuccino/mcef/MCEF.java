@@ -1,7 +1,7 @@
 package de.keksuccino.mcef;
 
 import de.keksuccino.mcef.listeners.MCEFInitListener;
-import de.keksuccino.mcef.mixins.MixinMinecraft;
+import de.keksuccino.mcef.mixins.MixinGui;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import org.cef.misc.CefCursorType;
@@ -23,6 +23,7 @@ public final class MCEF {
     private static MCEFSettings settings;
     private static volatile MCEFApp app;
     private static volatile MCEFClient client;
+    private static final MCEFInitializationController INITIALIZATION_CONTROLLER = new MCEFInitializationController();
 
     private static final ArrayList<MCEFInitListener> awaitingInit = new ArrayList<>();
     private static final String PRELOADED_BROWSER_START_URL = "about:blank";
@@ -54,57 +55,64 @@ public final class MCEF {
     }
 
     /**
-     * This gets called by {@link MixinMinecraft}.
+     * This gets called by {@link MixinGui}.
      * This should not be called by anything else.
      */
     public static boolean initialize() {
-        LOGGER.info("Initializing CEF on " + MCEFPlatform.getPlatform().getNormalizedName() + "...");
-        if (CefUtil.init()) {
-            app = new MCEFApp(CefUtil.getCefApp());
-            client = new MCEFClient(CefUtil.getCefClient());
-            List<MCEFBrowser> stalePreloadedBrowsers = new ArrayList<>();
-            synchronized (PRELOADED_BROWSER_POOL_LOCK) {
-                stalePreloadedBrowsers.addAll(PRELOADED_TRANSPARENT_BROWSERS);
-                stalePreloadedBrowsers.addAll(PRELOADED_OPAQUE_BROWSERS);
-                PRELOADED_TRANSPARENT_BROWSERS.clear();
-                PRELOADED_OPAQUE_BROWSERS.clear();
-                preloadTransparentInFlight = 0;
-                preloadOpaqueInFlight = 0;
-                preloadPoolClosed = false;
+        synchronized (INITIALIZATION_CONTROLLER) {
+            MCEFInitializationController.BeginResult beginResult = INITIALIZATION_CONTROLLER.beginInitialization();
+            if (beginResult == MCEFInitializationController.BeginResult.ALREADY_INITIALIZED) return true;
+            if (beginResult == MCEFInitializationController.BeginResult.REJECTED) return false;
+
+            try {
+                LOGGER.info("Initializing CEF on " + MCEFPlatform.getPlatform().getNormalizedName() + "...");
+                if (CefUtil.init()) {
+                    app = new MCEFApp(CefUtil.getCefApp());
+                    client = new MCEFClient(CefUtil.getCefClient());
+                    INITIALIZATION_CONTROLLER.markInitialized();
+                    List<MCEFBrowser> stalePreloadedBrowsers = new ArrayList<>();
+                    synchronized (PRELOADED_BROWSER_POOL_LOCK) {
+                        stalePreloadedBrowsers.addAll(PRELOADED_TRANSPARENT_BROWSERS);
+                        stalePreloadedBrowsers.addAll(PRELOADED_OPAQUE_BROWSERS);
+                        PRELOADED_TRANSPARENT_BROWSERS.clear();
+                        PRELOADED_OPAQUE_BROWSERS.clear();
+                        preloadTransparentInFlight = 0;
+                        preloadOpaqueInFlight = 0;
+                        preloadPoolClosed = false;
+                    }
+                    for (MCEFBrowser browser : stalePreloadedBrowsers) closeBrowserQuietly(browser);
+
+                    awaitingInit.forEach(t -> t.onInit(true));
+                    awaitingInit.clear();
+                    LOGGER.info("Chromium Embedded Framework initialized");
+
+                    app.getHandle().registerSchemeHandlerFactory("mod", "", (browser, frame, url, request) -> new ModScheme(request.getURL()));
+                    prefillPreloadedBrowserPoolsAsync();
+
+                    // These callbacks are important because JCEF helper processes can otherwise
+                    // survive the game. MCEF's lifecycle gate makes every shutdown path idempotent.
+                    MCEFPlatform platform = MCEFPlatform.getPlatform();
+                    if (platform.isLinux() || platform.isWindows()) {
+                        Runtime.getRuntime().addShutdownHook(new Thread(MCEF::shutdown, "MCEF-Shutdown"));
+                    } else if (platform.isMacOS()) {
+                        CefUtil.getCefApp().macOSTerminationRequestRunnable = () -> {
+                            shutdown();
+                            Minecraft.getInstance().stop();
+                        };
+                    }
+
+                    return true;
+                }
+                awaitingInit.forEach(t -> t.onInit(false));
+                awaitingInit.clear();
+                LOGGER.error("Could not initialize Chromium Embedded Framework");
+                shutdownLocked();
+                return false;
+            } catch (RuntimeException | Error failure) {
+                shutdownLocked();
+                throw failure;
             }
-            for (MCEFBrowser browser : stalePreloadedBrowsers) {
-                closeBrowserQuietly(browser);
-            }
-
-            awaitingInit.forEach(t -> t.onInit(true));
-            awaitingInit.clear();
-            LOGGER.info("Chromium Embedded Framework initialized");
-
-            app.getHandle().registerSchemeHandlerFactory(
-                    "mod", "",
-                    (browser, frame, url, request) -> new ModScheme(request.getURL())
-            );
-            prefillPreloadedBrowserPoolsAsync();
-
-            // Handle shutdown events, macOS is special
-            // These are important; the jcef process will linger around if not done
-            MCEFPlatform platform = MCEFPlatform.getPlatform();
-            if (platform.isLinux() || platform.isWindows()) {
-                Runtime.getRuntime().addShutdownHook(new Thread(MCEF::shutdown, "MCEF-Shutdown"));
-            } else if (platform.isMacOS()) {
-                CefUtil.getCefApp().macOSTerminationRequestRunnable = () -> {
-                    shutdown();
-                    Minecraft.getInstance().stop();
-                };
-            }
-
-            return true;
         }
-        awaitingInit.forEach(t -> t.onInit(false));
-        awaitingInit.clear();
-        LOGGER.error("Could not initialize Chromium Embedded Framework");
-        shutdown();
-        return false;
     }
 
     /**
@@ -169,13 +177,26 @@ public final class MCEF {
      * @return true if MCEF is initialized correctly, false if not
      */
     public static boolean isInitialized() {
-        return client != null;
+        return INITIALIZATION_CONTROLLER.isInitialized();
+    }
+
+    /** Returns whether a new CEF initialization attempt may be scheduled. */
+    public static boolean isInitializationAllowed() {
+        return INITIALIZATION_CONTROLLER.canInitialize();
     }
 
     /**
-     * Request a shutdown of MCEF/CEF. Nothing will happen if not initialized.
+     * Permanently shuts down MCEF/CEF for this game process. Calling this method before
+     * initialization also seals the lifecycle because CEF cannot safely be restarted later.
      */
     public static void shutdown() {
+        synchronized (INITIALIZATION_CONTROLLER) {
+            shutdownLocked();
+        }
+    }
+
+    private static void shutdownLocked() {
+        INITIALIZATION_CONTROLLER.terminate();
         synchronized (PRELOADED_BROWSER_POOL_LOCK) {
             preloadPoolClosed = true;
         }

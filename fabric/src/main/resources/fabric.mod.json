@@ -15,7 +15,7 @@
   "icon": "${mod_id}_logo_128x128.png",
   "entrypoints": {
     "main": [
-      "de.cinemamod.mcef.MCEFFabric"
+      "de.keksuccino.mcef.MCEFFabric"
     ],
     "client": [],
     "server": []
