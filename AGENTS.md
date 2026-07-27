@@ -56,12 +56,6 @@
 - If possible, always analyze/inspect the actual code of the other mod, to understand the origin of the issue, instead of guessing.
 - When inspecting the source of other mods, always prefer the latest available build of the mod for this project's Minecraft version, to be able to understand how the other mod's code works, and to see if the conflict maybe already got fixed on the other mod's side.
 - When you need to add compat code for a mod, place these classes in dedicated and well-organized "compat" packages.
-## Localization
-- Always add en_us localizations for the features you add. Only en_us.
-- The en_us.json file is pretty large, too large for you to read the full file, so if you need something from it, search for specific lines.
-- ALWAYS add new locals to the END OF THE FILE (without breaking the JSON syntax).
-- When you add something to a system that already has localizations available for other parts of the system, first read the existing localizations to understand how the new localizations should get formatted.
-- Always read and write en_us.json with an explicit UTF-8-without-BOM encoding.
 
 ## Minecraft Sources
 - You have access to the full Minecraft 26.2 sources in `/Volumes/STUFF/CODING/WORKSPACES/Java/Minecraft Mods/.MINECRAFT_SOURCES/26.2/minecraft/fabric/` and `/Volumes/STUFF/CODING/WORKSPACES/Java/Minecraft Mods/.MINECRAFT_SOURCES/26.2/minecraft/neoforge/`.
