@@ -1,6 +1,6 @@
 
-import com.cinemamod.gradle.JcefArchiveProvenance
-import com.cinemamod.gradle.JcefProvenance
+import de.keksuccino.gradle.JcefArchiveProvenance
+import de.keksuccino.gradle.JcefProvenance
 
 plugins {
     // Required for NeoGradle

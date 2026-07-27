@@ -6,10 +6,10 @@
   "mixins": [
   ],
   "client": [
-    "MixinClientPackSource",
-    "MixinGui",
-    "MixinMinecraft",
-    "MixinGameRenderer"
+    "de.cinemamod.mcef.mixins.MixinClientPackSource",
+    "de.cinemamod.mcef.mixins.MixinGui",
+    "de.cinemamod.mcef.mixins.MixinMinecraft",
+    "de.cinemamod.mcef.mixins.MixinGameRenderer"
   ],
   "injectors": {
     "defaultRequire": 1
