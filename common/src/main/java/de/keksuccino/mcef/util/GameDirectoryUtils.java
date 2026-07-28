@@ -1,5 +1,6 @@
 package de.keksuccino.mcef.util;
 
+import de.keksuccino.mcef.platform.Services;
 import net.minecraft.client.Minecraft;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -26,7 +27,7 @@ public class GameDirectoryUtils {
                 return path.toAbsolutePath().getParent().toFile();
             }
         } catch (Exception ex) {
-            LOGGER.error("[FANCYMENU] Failed to get game directory!", ex);
+            LOGGER.error("[MCEF] Failed to get game directory!", ex);
         }
         Path workingDirectory = Paths.get("").toAbsolutePath().normalize();
         if (Files.isDirectory(workingDirectory)) {
@@ -53,8 +54,8 @@ public class GameDirectoryUtils {
                 if (path.startsWith("/")) path = path.substring(1);
                 return gameDir + "/" + path;
             }
-        } catch (Exception e) {
-            e.printStackTrace();
+        } catch (Exception ex) {
+            LOGGER.error("[MCEF] Failed to get absolute game directory path!", ex);
         }
         return path;
     }
