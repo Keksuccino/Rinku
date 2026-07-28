@@ -283,9 +283,9 @@ subprojects {
         }
     }
 
-    if (providers.gradleProperty("mcef.enableDependencyLocking").map { it.toBoolean() }.orElse(false).get()) {
+    if (providers.gradleProperty("rinku.enableDependencyLocking").map { it.toBoolean() }.orElse(false).get()) {
         dependencyLocking {
-            // Enable with -Pmcef.enableDependencyLocking=true and generate/update locks via:
+            // Enable with -Prinku.enableDependencyLocking=true and generate/update locks via:
             // ./gradlew --write-locks <task>
             lockMode = org.gradle.api.artifacts.dsl.LockMode.LENIENT
             lockAllConfigurations()
@@ -306,7 +306,7 @@ subprojects {
     }
 
     tasks.withType(Test).configureEach {
-        systemProperty "mcef.test.jcefCommit", jcefCommit
+        systemProperty "rinku.test.jcefCommit", jcefCommit
     }
 
     processResources {

@@ -28,9 +28,9 @@ def generateJcefRuntimeIdentity = tasks.register("generateJcefRuntimeIdentity") 
     inputs.property("jcefCommit", rootProject.jcefCommit)
     outputs.dir(generatedJcefIdentityDirectory)
     doLast {
-        def sourceFile = generatedJcefIdentityDirectory.get().file("de/keksuccino/mcef/JcefRuntimeIdentity.java").asFile
+        def sourceFile = generatedJcefIdentityDirectory.get().file("de/keksuccino/rinku/JcefRuntimeIdentity.java").asFile
         sourceFile.parentFile.mkdirs()
-        sourceFile.setText("""package de.keksuccino.mcef;
+        sourceFile.setText("""package de.keksuccino.rinku;
 
 /** Build-generated identity binding the Java API and downloaded native runtime to one JCEF release. */
 final class JcefRuntimeIdentity {

@@ -15,7 +15,7 @@
   "icon": "${mod_id}_logo_128x128.png",
   "entrypoints": {
     "main": [
-      "de.keksuccino.mcef.MCEFFabric"
+      "de.keksuccino.rinku.RinkuFabric"
     ],
     "client": [],
     "server": []
