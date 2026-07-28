@@ -14,7 +14,7 @@ public class RinkuDownloaderScreen extends Screen {
     private final Screen parent;
 
     public RinkuDownloaderScreen(@Nullable Screen parent) {
-        super(Component.literal("Rinku is downloading required libraries..").withStyle(ChatFormatting.GOLD));
+        super(Component.translatable("rinku.downloader.title").withStyle(ChatFormatting.GOLD));
         this.parent = parent;
     }
 
@@ -56,9 +56,9 @@ public class RinkuDownloaderScreen extends Screen {
 
         // putting this here incase I want to re-add a third line later on
         // allows me to generalize the code to not care about line count
-        String[] text = new String[] {
+        Component[] text = new Component[] {
                 RinkuDownloadListener.INSTANCE.getTask(),
-                Math.round(RinkuDownloadListener.INSTANCE.getProgress() * 100) + "%",
+                Component.translatable("rinku.downloader.progress", Math.round(RinkuDownloadListener.INSTANCE.getProgress() * 100)),
         };
 
         /* Draw Text */
@@ -71,7 +71,7 @@ public class RinkuDownloaderScreen extends Screen {
         graphics.text(this.font, this.title, (int) -(font.width(this.title) / 2d), 0, -1);
         // draw other text
         int index = 0;
-        for (String s : text) {
+        for (Component s : text) {
             if (index == 1) {
                 matrix.translate(0.0F, font.lineHeight + 2.0F);
             }

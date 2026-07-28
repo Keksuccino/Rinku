@@ -2,6 +2,7 @@ package de.keksuccino.rinku.binarydownload;
 
 import de.keksuccino.rinku.*;
 import de.keksuccino.rinku.util.GameDirectoryUtils;
+import net.minecraft.network.chat.Component;
 import org.slf4j.Logger;
 import com.mojang.logging.LogUtils;
 
@@ -83,7 +84,11 @@ public class RinkuDownloader {
         this(host, JcefRuntimeIdentity.JAVA_CEF_COMMIT, platform, downloadPolicy, null, null, null);
     }
 
-    RinkuDownloader(String host, String javaCefCommitHash, OSPlatform platform, DownloadPolicy downloadPolicy, Path librariesDirectory, ArtifactDownloader artifactDownloader, ArchiveExtractor archiveExtractor) {
+    /**
+     * Injectable constructor used by deterministic installer integrations and regression tests.
+     * Production callers should normally use the shorter constructors so the build-pinned commit and real I/O remain authoritative.
+     */
+    public RinkuDownloader(String host, String javaCefCommitHash, OSPlatform platform, DownloadPolicy downloadPolicy, Path librariesDirectory, ArtifactDownloader artifactDownloader, ArchiveExtractor archiveExtractor) {
         this.javaCefCommitHash = RinkuJcefInstallationValidator.normalizeCommit(javaCefCommitHash);
         this.platform = Objects.requireNonNull(platform, "Rinku platform must not be null");
         this.downloadPolicy = downloadPolicy == null ? DownloadPolicy.defaults() : downloadPolicy;
@@ -153,7 +158,7 @@ public class RinkuDownloader {
 
     private Path installFromMirror(RinkuJcefInstaller installer, RinkuDownloadMirror mirror) throws IOException {
         String expectedChecksum = downloadChecksumFromMirror(installer, mirror);
-        RinkuDownloadListener.INSTANCE.setTask("Downloading Chromium Embedded Framework");
+        RinkuDownloadListener.INSTANCE.setTask(Component.translatable("rinku.downloader.task.downloading_framework"));
         downloadArtifact(mirror, archiveAssetName(), installer.candidateArchive().toFile(), downloadPolicy.maxArchiveBytes());
         try (RinkuVerifiedArchiveSource archive = RinkuVerifiedArchiveSource.open(installer.candidateArchive(), downloadPolicy.maxArchiveBytes())) {
             String actualDigest = archive.calculateDigest();
@@ -167,7 +172,7 @@ public class RinkuDownloader {
 
     private String downloadChecksumFromMirror(RinkuJcefInstaller installer, RinkuDownloadMirror mirror) throws IOException {
         try {
-            RinkuDownloadListener.INSTANCE.setTask("Downloading Checksum");
+            RinkuDownloadListener.INSTANCE.setTask(Component.translatable("rinku.downloader.task.downloading_checksum"));
             downloadArtifact(mirror, checksumAssetName(), installer.candidateChecksum().toFile(), downloadPolicy.maxChecksumBytes());
             String expectedChecksum = readChecksum(installer.candidateChecksum().toFile(), downloadPolicy.enforceChecksums());
             if (expectedChecksum == null && downloadPolicy.enforceChecksums()) {
@@ -227,12 +232,11 @@ public class RinkuDownloader {
     }
 
     private void extractArchive(RinkuVerifiedArchiveSource archive, String expectedDigest, File outputDirectory) throws IOException {
+        RinkuDownloadListener.INSTANCE.setTask(Component.translatable("rinku.downloader.task.extracting"));
         if (archiveExtractor != null) {
-            RinkuDownloadListener.INSTANCE.setTask("Extracting");
             archive.verifiedPass(expectedDigest, input -> archiveExtractor.extract(input, outputDirectory));
             return;
         }
-        RinkuDownloadListener.INSTANCE.setTask("Extracting");
         RinkuSecureArchiveExtractor.extract(archive, expectedDigest, outputDirectory, platform, downloadPolicy, RinkuDownloadListener.INSTANCE::setProgress);
     }
 
@@ -472,12 +476,12 @@ public class RinkuDownloader {
     }
 
     @FunctionalInterface
-    interface ArtifactDownloader {
+    public interface ArtifactDownloader {
         void download(String assetUrl, File outputFile, long maxBytes) throws IOException;
     }
 
     @FunctionalInterface
-    interface ArchiveExtractor {
+    public interface ArchiveExtractor {
         void extract(InputStream archive, File outputDirectory) throws IOException;
     }
 

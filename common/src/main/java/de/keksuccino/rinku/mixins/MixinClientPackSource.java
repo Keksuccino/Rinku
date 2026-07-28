@@ -1,14 +1,15 @@
 package de.keksuccino.rinku.mixins;
 
-import de.keksuccino.rinku.Rinku;
-import de.keksuccino.rinku.binarydownload.RinkuDownloader;
+import com.mojang.logging.LogUtils;
 import de.keksuccino.rinku.OSPlatform;
+import de.keksuccino.rinku.Rinku;
 import de.keksuccino.rinku.RinkuSettings;
 import de.keksuccino.rinku.binarydownload.RinkuDownloadListener;
+import de.keksuccino.rinku.binarydownload.RinkuDownloader;
 import de.keksuccino.rinku.util.GameDirectoryUtils;
 import net.minecraft.client.resources.ClientPackSource;
+import net.minecraft.network.chat.Component;
 import org.slf4j.Logger;
-import com.mojang.logging.LogUtils;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -39,12 +40,12 @@ public class MixinClientPackSource {
     private static void on_clinit_RINKU(CallbackInfo callbackInfo) {
         RinkuDownloadListener.INSTANCE.setDone(false);
         RinkuDownloadListener.INSTANCE.setFailed(false);
-        RinkuDownloadListener.INSTANCE.setTask("Preparing Download");
+        RinkuDownloadListener.INSTANCE.setTask(Component.translatable("rinku.downloader.task.preparing"));
 
         try {
             setupLibraryPath_RINKU();
         } catch (IOException | RuntimeException e) {
-            failDownload_RINKU("Failed to prepare Rinku library paths", e);
+            failDownload_RINKU("Failed to prepare Rinku library paths", Component.translatable("rinku.downloader.task.failed_library_paths"), e);
             return;
         }
 
@@ -73,18 +74,18 @@ public class MixinClientPackSource {
             System.setProperty("jcef.path", installation.installationDirectory().toRealPath().toString());
             RinkuDownloadListener.INSTANCE.setDone(true);
         } catch (IOException e) {
-            failDownload_RINKU("Failed to initialize JCEF downloader", e);
+            failDownload_RINKU("Failed to initialize JCEF downloader", Component.translatable("rinku.downloader.task.failed_initialization"), e);
         } catch (RuntimeException e) {
-            failDownload_RINKU("JCEF downloader failed due to an invalid configuration", e);
+            failDownload_RINKU("JCEF downloader failed due to an invalid configuration", Component.translatable("rinku.downloader.task.failed_configuration"), e);
         }
     }
 
     @Unique
-    private static void failDownload_RINKU(String task, Exception e) {
+    private static void failDownload_RINKU(String logMessage, Component task, Exception e) {
         if (e != null) {
-            LOGGER_RINKU.error(task, e);
+            LOGGER_RINKU.error(logMessage, e);
         } else {
-            LOGGER_RINKU.error(task);
+            LOGGER_RINKU.error(logMessage);
         }
         RinkuDownloadListener.INSTANCE.setTask(task);
         RinkuDownloadListener.INSTANCE.setFailed(true);

@@ -1,26 +1,28 @@
 package de.keksuccino.rinku.binarydownload;
 
-import org.spongepowered.asm.mixin.Unique;
+import net.minecraft.network.chat.Component;
+import java.util.Objects;
 
 public class RinkuDownloadListener {
-    // TODO: I kinda would like to keep other mods from accessing this, but mixin complicates stuff
-    @Unique
+
     public static final RinkuDownloadListener INSTANCE = new RinkuDownloadListener();
 
     // The installer runs on Rinku-Downloader while the render thread polls this state. Volatile
     // publication keeps progress and the terminal state visible without tying either thread to a
     // UI lock during network and extraction work.
-    private volatile String task;
+    private volatile Component task = Component.empty();
     private volatile float percent;
     private volatile boolean done;
     private volatile boolean failed;
 
-    public void setTask(String name) {
-        this.task = name;
+    private RinkuDownloadListener() {}
+
+    public void setTask(Component task) {
+        this.task = Objects.requireNonNull(task, "Downloader task must not be null");
         this.percent = 0;
     }
 
-    public String getTask() {
+    public Component getTask() {
         return task;
     }
 
@@ -47,4 +49,5 @@ public class RinkuDownloadListener {
     public boolean isFailed() {
         return failed;
     }
+
 }
