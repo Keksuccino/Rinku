@@ -136,8 +136,8 @@ public class MCEFClient implements CefLoadHandler, CefContextMenuHandler, CefDis
             if (displayHandler.onConsoleMessage(browser, level, message, source, line))
                 return true;
 
-        if (shouldForwardConsoleMessageToMcLog_MCEF(level)) {
-            logConsoleMessageToMcLog_MCEF(browser, level, message, source, line);
+        if (shouldForwardConsoleMessageToMcLog(level)) {
+            logConsoleMessageToMcLog(browser, level, message, source, line);
         }
 
         // Always consume here so CEF doesn't bypass our filtering and spam the process console.
@@ -219,7 +219,7 @@ public class MCEFClient implements CefLoadHandler, CefContextMenuHandler, CefDis
         downloadHandlerRelay.onDownloadUpdated(browser, downloadItem, callback);
     }
 
-    private static boolean shouldForwardConsoleMessageToMcLog_MCEF(CefSettings.LogSeverity level) {
+    private static boolean shouldForwardConsoleMessageToMcLog(CefSettings.LogSeverity level) {
         CefSettings.LogSeverity threshold = MCEF.getSettings().getConsoleLogForwardingMinSeverity();
         CefSettings.LogSeverity effectiveThreshold = threshold == null
                 ? CefSettings.LogSeverity.LOGSEVERITY_DISABLE
@@ -231,10 +231,10 @@ public class MCEFClient implements CefLoadHandler, CefContextMenuHandler, CefDis
         CefSettings.LogSeverity effectiveLevel = level == null
                 ? CefSettings.LogSeverity.LOGSEVERITY_DEFAULT
                 : level;
-        return getSeverityRank_MCEF(effectiveLevel) >= getSeverityRank_MCEF(effectiveThreshold);
+        return getSeverityRank(effectiveLevel) >= getSeverityRank(effectiveThreshold);
     }
 
-    private static int getSeverityRank_MCEF(CefSettings.LogSeverity severity) {
+    private static int getSeverityRank(CefSettings.LogSeverity severity) {
         return switch (severity) {
             case LOGSEVERITY_VERBOSE -> 0;
             case LOGSEVERITY_DEFAULT, LOGSEVERITY_INFO -> 1;
@@ -245,7 +245,7 @@ public class MCEFClient implements CefLoadHandler, CefContextMenuHandler, CefDis
         };
     }
 
-    private static void logConsoleMessageToMcLog_MCEF(
+    private static void logConsoleMessageToMcLog(
             CefBrowser browser,
             CefSettings.LogSeverity level,
             String message,

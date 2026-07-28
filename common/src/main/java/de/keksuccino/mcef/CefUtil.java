@@ -115,7 +115,7 @@ final class CefUtil {
         CefSettings cefSettings = new CefSettings();
         cefSettings.windowless_rendering_enabled = true;
         if (settings.isUsingCache()) {
-            Path cachePath = resolvePersistentCefCachePath_MCEF().toAbsolutePath();
+            Path cachePath = resolvePersistentCefCachePath().toAbsolutePath();
             try {
                 Files.createDirectories(cachePath);
                 // jcef wants an absolute path, so make sure it's absolute.
@@ -163,11 +163,11 @@ final class CefUtil {
         return cefClientInstance;
     }
 
-    private static Path resolvePersistentCefCachePath_MCEF() {
-        return resolvePersistentDataRoot_MCEF().resolve("cef-cache");
+    private static Path resolvePersistentCefCachePath() {
+        return resolvePersistentDataRoot().resolve("cef-cache");
     }
 
-    private static Path resolvePersistentDataRoot_MCEF() {
+    private static Path resolvePersistentDataRoot() {
         MCEFPlatform platform = MCEFPlatform.getPlatform();
         String userHome = System.getProperty("user.home", ".");
 

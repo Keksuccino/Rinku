@@ -21,7 +21,7 @@ public class MCEFRenderer {
     private final Identifier textureIdentifier;
     private MCEFDirectTexture directTexture;
     private boolean textureRegistered = false;
-    private ByteBuffer fallbackRgbaUploadBuffer_MCEF;
+    private ByteBuffer fallbackRgbaUploadBuffer;
 
     protected MCEFRenderer(boolean transparent) {
         this.transparent = transparent;
@@ -94,7 +94,7 @@ public class MCEFRenderer {
             texture.close();
             texture = null;
         }
-        fallbackRgbaUploadBuffer_MCEF = null;
+        fallbackRgbaUploadBuffer = null;
         
         // Unregister from TextureManager
         if (textureRegistered && textureIdentifier != null) {
@@ -142,7 +142,7 @@ public class MCEFRenderer {
             return;
         }
 
-        uploadWithCommandEncoder_MCEF(buffer, 0, 0, width, height);
+        uploadWithCommandEncoder(buffer, 0, 0, width, height);
     }
 
     protected void onPaint(ByteBuffer buffer, int x, int y, int width, int height) {
@@ -157,7 +157,7 @@ public class MCEFRenderer {
         }
 
         // Fallback upload path assumes a tightly packed source rectangle.
-        uploadWithCommandEncoder_MCEF(buffer, x, y, width, height);
+        uploadWithCommandEncoder(buffer, x, y, width, height);
     }
 
     private void syncDirectTextureViewIfNeeded() {
@@ -174,7 +174,7 @@ public class MCEFRenderer {
         }
     }
 
-    private void uploadWithCommandEncoder_MCEF(
+    private void uploadWithCommandEncoder(
             ByteBuffer buffer,
             int destinationX,
             int destinationY,
@@ -190,7 +190,7 @@ public class MCEFRenderer {
             return;
         }
 
-        ByteBuffer uploadBuffer = convertBgraToRgba_MCEF(buffer, requiredBytes);
+        ByteBuffer uploadBuffer = convertBgraToRgba(buffer, requiredBytes);
         if (uploadBuffer == null) {
             return;
         }
@@ -209,20 +209,20 @@ public class MCEFRenderer {
                 );
     }
 
-    private ByteBuffer convertBgraToRgba_MCEF(ByteBuffer sourceBuffer, int requiredBytes) {
+    private ByteBuffer convertBgraToRgba(ByteBuffer sourceBuffer, int requiredBytes) {
         if (requiredBytes <= 0 || (requiredBytes & 3) != 0) {
             return null;
         }
 
-        if (fallbackRgbaUploadBuffer_MCEF == null || fallbackRgbaUploadBuffer_MCEF.capacity() < requiredBytes) {
-            fallbackRgbaUploadBuffer_MCEF = ByteBuffer.allocateDirect(requiredBytes);
+        if (fallbackRgbaUploadBuffer == null || fallbackRgbaUploadBuffer.capacity() < requiredBytes) {
+            fallbackRgbaUploadBuffer = ByteBuffer.allocateDirect(requiredBytes);
         }
 
         ByteBuffer src = sourceBuffer.duplicate();
         src.position(0);
         src.limit(requiredBytes);
 
-        ByteBuffer dst = fallbackRgbaUploadBuffer_MCEF.duplicate();
+        ByteBuffer dst = fallbackRgbaUploadBuffer.duplicate();
         dst.clear();
         dst.limit(requiredBytes);
 

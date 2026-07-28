@@ -21,12 +21,12 @@ public final class MCEFRenderCoordinator {
 
     public static void pumpOnRenderThread() {
         RenderSystem.assertOnRenderThread();
-        BROWSERS.pump(MCEFBrowser::pumpAsyncPaintsOnRenderThread_MCEF, MCEFRenderCoordinator::logBrowserFailure);
+        BROWSERS.pump(MCEFBrowser::pumpAsyncPaintsOnRenderThread, MCEFRenderCoordinator::logBrowserFailure);
     }
 
     public static void shutdownOnRenderThread() {
         RenderSystem.assertOnRenderThread();
-        BROWSERS.shutdown(MCEFBrowser::shutdownOnRenderThread_MCEF, MCEFRenderCoordinator::logBrowserFailure);
+        BROWSERS.shutdown(MCEFBrowser::shutdownOnRenderThread, MCEFRenderCoordinator::logBrowserFailure);
     }
 
     private static void logBrowserFailure(MCEFBrowser browser, Throwable failure) {
