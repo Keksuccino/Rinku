@@ -4,6 +4,7 @@ import de.keksuccino.rinku.listeners.RinkuInitListener;
 import de.keksuccino.rinku.mixins.MixinGui;
 import com.mojang.blaze3d.systems.RenderSystem;
 import de.keksuccino.rinku.platform.Services;
+import de.keksuccino.rinku.util.CefUtil;
 import net.minecraft.client.Minecraft;
 import org.cef.misc.CefCursorType;
 import org.jetbrains.annotations.Nullable;

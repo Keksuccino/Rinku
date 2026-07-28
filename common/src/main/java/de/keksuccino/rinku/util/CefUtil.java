@@ -1,5 +1,8 @@
-package de.keksuccino.rinku;
+package de.keksuccino.rinku.util;
 
+import de.keksuccino.rinku.OSPlatform;
+import de.keksuccino.rinku.Rinku;
+import de.keksuccino.rinku.RinkuSettings;
 import org.cef.CefApp;
 import org.cef.CefClient;
 import org.cef.CefSettings;
@@ -20,7 +23,7 @@ import java.util.Set;
 /**
  * This class mostly just interacts with org.cef.* for internal use in {@link Rinku}.
  */
-final class CefUtil {
+public final class CefUtil {
 
     private static final Logger LOGGER = LogUtils.getLogger();
 
@@ -30,7 +33,7 @@ final class CefUtil {
 
     private CefUtil() {}
 
-    static void addUnixExecutePermissions(Path file) throws IOException {
+    public static void addUnixExecutePermissions(Path file) throws IOException {
         PosixFileAttributeView posixView = Files.getFileAttributeView(file, PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
         if (posixView == null) {
             addPortableExecutePermissions(file);
@@ -50,7 +53,7 @@ final class CefUtil {
         posixView.setPermissions(updated);
     }
 
-    static void addPortableExecutePermissions(Path file) throws IOException {
+    public static void addPortableExecutePermissions(Path file) throws IOException {
         boolean changed;
         try {
             changed = file.toFile().setExecutable(true, false);
@@ -62,7 +65,7 @@ final class CefUtil {
         }
     }
 
-    static List<Path> unixExecutablePaths(Path installation, OSPlatform platform) {
+    public static List<Path> unixExecutablePaths(Path installation, OSPlatform platform) {
         if (platform.isLinux()) {
             return List.of(installation.resolve("jcef_helper"), installation.resolve("chrome-sandbox"));
         }
@@ -84,7 +87,7 @@ final class CefUtil {
         }
     }
 
-    static boolean init() {
+    public static boolean init() {
         OSPlatform platform = OSPlatform.getPlatform();
         String configuredJcefPath = System.getProperty("jcef.path");
         if (configuredJcefPath == null || configuredJcefPath.isBlank()) {
@@ -143,7 +146,7 @@ final class CefUtil {
         return init = true;
     }
 
-    static void shutdown() {
+    public static void shutdown() {
         if (isInit()) {
             init = false;
             cefClientInstance.dispose();
@@ -151,15 +154,15 @@ final class CefUtil {
         }
     }
 
-    static boolean isInit() {
+    public static boolean isInit() {
         return init;
     }
 
-    static CefApp getCefApp() {
+    public static CefApp getCefApp() {
         return cefAppInstance;
     }
 
-    static CefClient getCefClient() {
+    public static CefClient getCefClient() {
         return cefClientInstance;
     }
 
