@@ -4,7 +4,7 @@
 
 ## About
 
-Rinku is a mod and library for adding the Chromium web browser into Minecraft.
+Rinku is a library mod for rendering a Chromium-based browser in Minecraft.
 
 **Support & Discussion:** https://discord.gg/rhayah27GC
 
