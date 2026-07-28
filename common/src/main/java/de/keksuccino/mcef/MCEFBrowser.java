@@ -1,5 +1,6 @@
 package de.keksuccino.mcef;
 
+import com.mojang.logging.LogUtils;
 import de.keksuccino.mcef.listeners.MCEFCursorChangeListener;
 import com.mojang.blaze3d.opengl.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -15,7 +16,6 @@ import org.cef.misc.CefCursorType;
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.system.MemoryUtil;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import java.awt.*;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -29,7 +29,8 @@ import static org.lwjgl.glfw.GLFW.*;
  * browser control shortcuts, cursor handling, drag & drop support.
  */
 public class MCEFBrowser extends CefBrowserOsr {
-    private static final Logger LOGGER = LoggerFactory.getLogger("MCEF");
+
+    private static final Logger LOGGER = LogUtils.getLogger();
     private static final int MAX_PENDING_PAINT_STREAMS_MCEF = 2;
 
     /**
@@ -49,22 +50,18 @@ public class MCEFBrowser extends CefBrowserOsr {
         public void targetEnter(CefDragData dragData, int x, int y, int modifiers, int allowedOperations) {
             MCEFBrowser.this.dragTargetDragEnter(dragData, new Point(x, y), modifiers, allowedOperations);
         }
-
         @Override
         public void targetDrop(int x, int y, int modifiers) {
             MCEFBrowser.this.dragTargetDrop(new Point(x, y), modifiers);
         }
-
         @Override
         public void targetLeave() {
             MCEFBrowser.this.dragTargetDragLeave();
         }
-
         @Override
         public void sourceEndedAt(int x, int y, int operation) {
             MCEFBrowser.this.dragSourceEndedAt(new Point(x, y), operation);
         }
-
         @Override
         public void sourceSystemDragEnded() {
             MCEFBrowser.this.dragSourceSystemDragEnded();
