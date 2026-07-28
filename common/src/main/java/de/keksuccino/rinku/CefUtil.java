@@ -21,10 +21,10 @@ import java.util.Set;
  * This class mostly just interacts with org.cef.* for internal use in {@link Rinku}
  */
 final class CefUtil {
+
     private static final Logger LOGGER = LogUtils.getLogger();
 
-    private CefUtil() {
-    }
+    private CefUtil() {}
 
     private static boolean init;
     private static CefApp cefAppInstance;
@@ -196,4 +196,5 @@ final class CefUtil {
 
         return Path.of(userHome, ".local", "share", "rinku");
     }
+
 }
