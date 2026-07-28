@@ -3,7 +3,7 @@ package de.keksuccino.mcef;
 import de.keksuccino.mcef.internal.MCEFDownloadListener;
 import de.keksuccino.mcef.util.GameDirectoryUtils;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.mojang.logging.LogUtils;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -31,7 +31,7 @@ import java.util.regex.Pattern;
 
 /** Downloads and atomically installs the exact java-cef build compiled into MCEF. */
 public class MCEFDownloader {
-    private static final Logger LOGGER = LoggerFactory.getLogger("MCEF");
+    private static final Logger LOGGER = LogUtils.getLogger();
 
     @FunctionalInterface
     interface ArtifactDownloader {

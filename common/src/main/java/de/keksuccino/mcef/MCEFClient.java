@@ -1,5 +1,6 @@
 package de.keksuccino.mcef;
 
+import com.mojang.logging.LogUtils;
 import org.cef.CefClient;
 import org.cef.CefSettings;
 import org.cef.browser.CefBrowser;
@@ -18,7 +19,6 @@ import org.cef.misc.CefAudioParameters;
 import org.cef.misc.DataPointer;
 import org.cef.network.CefRequest;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -27,7 +27,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * A wrapper around {@link CefClient}
  */
 public class MCEFClient implements CefLoadHandler, CefContextMenuHandler, CefDisplayHandler, CefAudioHandler, CefDownloadHandler {
-    private static final Logger LOGGER = LoggerFactory.getLogger("MCEF");
+
+    private static final Logger LOGGER = LogUtils.getLogger();
 
     private final CefClient handle;
     private final List<CefLoadHandler> loadHandlers = new CopyOnWriteArrayList<>();

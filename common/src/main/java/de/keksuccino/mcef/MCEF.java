@@ -7,7 +7,7 @@ import net.minecraft.client.Minecraft;
 import org.cef.misc.CefCursorType;
 import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.mojang.logging.LogUtils;
 import java.io.IOException;
 import java.util.*;
 
@@ -17,7 +17,7 @@ import java.util.*;
  */
 public final class MCEF {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger("MCEF");
+    private static final Logger LOGGER = LogUtils.getLogger();
     public static final String MOD_ID = "mcef";
 
     private static MCEFSettings settings;

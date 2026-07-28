@@ -8,6 +8,7 @@ import java.util.regex.Pattern;
 
 /** Strict parsing and path construction for a configured JCEF release mirror. */
 final class MCEFDownloadMirror {
+
     private static final Pattern SAFE_PATH_SEGMENT = Pattern.compile("[A-Za-z0-9._+-]+");
     private final URI baseUri;
 

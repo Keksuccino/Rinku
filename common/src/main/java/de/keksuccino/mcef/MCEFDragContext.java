@@ -2,25 +2,21 @@ package de.keksuccino.mcef;
 
 import org.cef.callback.CefDragData;
 import org.cef.misc.CefCursorType;
-
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class MCEFDragContext {
+
     private static final int NO_CURSOR_OVERRIDE = -1;
     private static final MCEFDragSessionController.Callbacks<CefDragData> NOOP_CALLBACKS = new MCEFDragSessionController.Callbacks<>() {
         @Override
         public void targetEnter(CefDragData resource, int x, int y, int modifiers, int allowedOperations) {}
-
         @Override
         public void targetDrop(int x, int y, int modifiers) {}
-
         @Override
         public void targetLeave() {}
-
         @Override
         public void sourceEndedAt(int x, int y, int operation) {}
-
         @Override
         public void sourceSystemDragEnded() {}
     };

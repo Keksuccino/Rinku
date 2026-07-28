@@ -8,7 +8,7 @@ import de.keksuccino.mcef.internal.MCEFDownloadListener;
 import de.keksuccino.mcef.util.GameDirectoryUtils;
 import net.minecraft.client.resources.ClientPackSource;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.mojang.logging.LogUtils;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -29,7 +29,7 @@ import java.nio.file.Path;
  */
 @Mixin(ClientPackSource.class)
 public class MixinClientPackSource {
-    @Unique private static final Logger LOGGER_MCEF = LoggerFactory.getLogger("MCEF");
+    @Unique private static final Logger LOGGER_MCEF = LogUtils.getLogger();
 
     /**
      * @reason This must remain at TAIL because Mixin merges LOGGER_MCEF's initializer into this same

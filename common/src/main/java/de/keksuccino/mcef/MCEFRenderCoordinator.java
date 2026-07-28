@@ -2,11 +2,12 @@ package de.keksuccino.mcef;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.mojang.logging.LogUtils;
 
 /** Internal render-frame bridge used by the Minecraft mixin. */
 public final class MCEFRenderCoordinator {
-    private static final Logger LOGGER = LoggerFactory.getLogger("MCEF");
+
+    private static final Logger LOGGER = LogUtils.getLogger();
     private static final RenderThreadMailboxCoordinator<MCEFBrowser> BROWSERS = new RenderThreadMailboxCoordinator<>();
 
     private MCEFRenderCoordinator() {}
@@ -32,4 +33,5 @@ public final class MCEFRenderCoordinator {
     private static void logBrowserFailure(MCEFBrowser browser, Throwable failure) {
         LOGGER.warn("MCEF browser render-thread lifecycle operation failed.", failure);
     }
+
 }

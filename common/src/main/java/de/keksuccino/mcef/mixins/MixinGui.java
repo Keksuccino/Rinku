@@ -22,7 +22,7 @@ import net.minecraft.client.gui.screens.worldselection.ExperimentsScreen;
 import net.minecraft.client.gui.screens.worldselection.SelectWorldScreen;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.mojang.logging.LogUtils;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -35,7 +35,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Mixin(Gui.class)
 public abstract class MixinGui {
     @Unique
-    private static final Logger LOGGER_MCEF = LoggerFactory.getLogger("MCEF");
+    private static final Logger LOGGER_MCEF = LogUtils.getLogger();
 
     @Unique
     private static final AtomicBoolean RECURSION_DETECTOR_MCEF = new AtomicBoolean(false);

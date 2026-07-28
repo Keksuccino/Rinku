@@ -4,7 +4,7 @@ import org.cef.CefApp;
 import org.cef.CefClient;
 import org.cef.CefSettings;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.mojang.logging.LogUtils;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -21,7 +21,7 @@ import java.util.Set;
  * This class mostly just interacts with org.cef.* for internal use in {@link MCEF}
  */
 final class CefUtil {
-    private static final Logger LOGGER = LoggerFactory.getLogger("MCEF");
+    private static final Logger LOGGER = LogUtils.getLogger();
 
     private CefUtil() {
     }

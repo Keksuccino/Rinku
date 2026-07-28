@@ -11,6 +11,7 @@ import java.util.function.Function;
  * disposer run without {@link #lock} held because either may enter native code and re-enter Java.
  */
 final class OwnedResourceSlot<T> implements AutoCloseable {
+
     private final Object lock = new Object();
     private final Consumer<? super T> disposer;
     private final Function<? super T, ?> resourceIdentity;

@@ -6,7 +6,7 @@ import de.keksuccino.mcef.MCEFRenderCoordinator;
 import net.minecraft.client.Minecraft;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.mojang.logging.LogUtils;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Mixin(Minecraft.class)
 public abstract class MixinMinecraft {
     @Unique
-    private static final Logger LOGGER_MCEF = LoggerFactory.getLogger("MCEF");
+    private static final Logger LOGGER_MCEF = LogUtils.getLogger();
 
     @Unique
     private static final String JCEF_HELPER_EXECUTABLE_WINDOWS_MCEF = "jcef_helper.exe";

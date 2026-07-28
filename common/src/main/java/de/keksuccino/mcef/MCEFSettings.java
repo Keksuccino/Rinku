@@ -3,7 +3,7 @@ package de.keksuccino.mcef;
 import de.keksuccino.mcef.util.GameDirectoryUtils;
 import org.cef.CefSettings;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.mojang.logging.LogUtils;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -14,7 +14,7 @@ import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 
 public class MCEFSettings {
-    private static final Logger LOGGER = LoggerFactory.getLogger("MCEF");
+    private static final Logger LOGGER = LogUtils.getLogger();
 
     private static final String DEFAULT_DOWNLOAD_MIRROR = MCEFDownloader.OFFICIAL_MIRROR;
     private static final MCEFDownloader.MirrorPolicy DEFAULT_DOWNLOAD_MIRROR_POLICY = MCEFDownloader.MirrorPolicy.OFFICIAL_ONLY;
