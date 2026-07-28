@@ -35,11 +35,12 @@ def generateJcefRuntimeIdentity = tasks.register("generateJcefRuntimeIdentity") 
         sourceFile.setText("""package de.keksuccino.rinku;
 
 /** Build-generated identity binding the Java API and downloaded native runtime to one JCEF release. */
-final class JcefRuntimeIdentity {
-    static final String JAVA_CEF_COMMIT = \"${rootProject.jcefCommit}\";
+public final class JcefRuntimeIdentity {
 
-    private JcefRuntimeIdentity() {
-    }
+    public static final String JAVA_CEF_COMMIT = \"${rootProject.jcefCommit}\";
+
+    private JcefRuntimeIdentity() {}
+    
 }
 """, "UTF-8")
         logger.lifecycle("${action} JCEF runtime identity at ${project.relativePath(sourceFile)} for commit ${rootProject.jcefCommit}.")

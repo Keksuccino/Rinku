@@ -1,5 +1,6 @@
 package de.keksuccino.rinku;
 
+import de.keksuccino.rinku.binarydownload.RinkuDownloader;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 import org.apache.commons.compress.compressors.gzip.GzipCompressorOutputStream;

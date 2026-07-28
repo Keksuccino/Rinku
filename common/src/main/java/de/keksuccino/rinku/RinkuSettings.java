@@ -1,5 +1,6 @@
 package de.keksuccino.rinku;
 
+import de.keksuccino.rinku.binarydownload.RinkuDownloader;
 import de.keksuccino.rinku.util.GameDirectoryUtils;
 import org.cef.CefSettings;
 import org.slf4j.Logger;

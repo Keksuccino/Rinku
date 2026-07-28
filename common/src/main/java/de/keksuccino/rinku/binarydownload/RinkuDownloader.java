@@ -1,6 +1,6 @@
-package de.keksuccino.rinku;
+package de.keksuccino.rinku.binarydownload;
 
-import de.keksuccino.rinku.internal.RinkuDownloadListener;
+import de.keksuccino.rinku.*;
 import de.keksuccino.rinku.util.GameDirectoryUtils;
 import org.slf4j.Logger;
 import com.mojang.logging.LogUtils;
@@ -428,7 +428,7 @@ public class RinkuDownloader {
         }
     }
 
-    static String normalizeOfficialMirror(String mirror) {
+    public static String normalizeOfficialMirror(String mirror) {
         if (mirror == null) {
             return null;
         }

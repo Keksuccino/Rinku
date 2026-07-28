@@ -22,9 +22,9 @@ import java.util.regex.Pattern;
  * pass hashes all raw archive bytes, including unread parser trailers, so path replacement and
  * same-inode mutation cannot pass with a restored pathname.
  */
-final class RinkuVerifiedArchiveSource implements AutoCloseable {
+public final class RinkuVerifiedArchiveSource implements AutoCloseable {
     @FunctionalInterface
-    interface InputConsumer {
+    public interface InputConsumer {
         void accept(InputStream input) throws IOException;
     }
 
@@ -43,7 +43,7 @@ final class RinkuVerifiedArchiveSource implements AutoCloseable {
         this.capturedSize = capturedSize;
     }
 
-    static RinkuVerifiedArchiveSource open(Path archive, long maxBytes) throws IOException {
+    public static RinkuVerifiedArchiveSource open(Path archive, long maxBytes) throws IOException {
         Path normalizedArchive = Objects.requireNonNull(archive, "JCEF archive must not be null").toAbsolutePath().normalize();
         if (maxBytes <= 0L) {
             throw new IllegalArgumentException("Maximum JCEF archive size must be positive");
@@ -73,11 +73,11 @@ final class RinkuVerifiedArchiveSource implements AutoCloseable {
         return capturedSize;
     }
 
-    String calculateDigest() throws IOException {
+    public String calculateDigest() throws IOException {
         return completePass(null, ignored -> {});
     }
 
-    void verifiedPass(String expectedDigest, InputConsumer consumer) throws IOException {
+    public void verifiedPass(String expectedDigest, InputConsumer consumer) throws IOException {
         completePass(normalizeDigest(expectedDigest), consumer);
     }
 

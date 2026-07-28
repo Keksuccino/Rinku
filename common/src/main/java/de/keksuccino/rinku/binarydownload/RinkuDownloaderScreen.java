@@ -1,26 +1,30 @@
-package de.keksuccino.rinku.internal;
+package de.keksuccino.rinku.binarydownload;
 
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix3x2fStack;
 
-public class RinkuDownloaderMenu extends Screen {
-    private final Screen menu;
+public class RinkuDownloaderScreen extends Screen {
 
-    public RinkuDownloaderMenu(Screen menu) {
-        super(Component.literal("Rinku is downloading required libraries...").withStyle(ChatFormatting.GOLD));
-        this.menu = menu;
+    private final Screen parent;
+
+    public RinkuDownloaderScreen(@Nullable Screen parent) {
+        super(Component.literal("Rinku is downloading required libraries..").withStyle(ChatFormatting.GOLD));
+        this.parent = parent;
     }
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+    public void extractRenderState(@NotNull GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
+
         double cx = width / 2d;
         double cy = height / 2d;
-
         double progressBarHeight = 14;
         double progressBarWidth = width / 3d;
 
@@ -83,7 +87,7 @@ public class RinkuDownloaderMenu extends Screen {
     public void tick() {
         if (RinkuDownloadListener.INSTANCE.isDone() || RinkuDownloadListener.INSTANCE.isFailed()) {
             onClose();
-            Minecraft.getInstance().gui.setScreen(menu);
+            Minecraft.getInstance().gui.setScreen(this.parent);
         }
     }
 

@@ -1,8 +1,8 @@
 package de.keksuccino.rinku.mixins;
 
 import de.keksuccino.rinku.Rinku;
-import de.keksuccino.rinku.internal.RinkuDownloadListener;
-import de.keksuccino.rinku.internal.RinkuDownloaderMenu;
+import de.keksuccino.rinku.binarydownload.RinkuDownloadListener;
+import de.keksuccino.rinku.binarydownload.RinkuDownloaderScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.screens.AccessibilityOnboardingScreen;
@@ -94,7 +94,7 @@ public abstract class MixinGui {
                 });
             } else if (!RinkuDownloadListener.INSTANCE.isDone() && !RinkuDownloadListener.INSTANCE.isFailed()) {
                 LOGGER_RINKU.debug("Rinku has not finished loading, displaying loading screen.");
-                setScreen(new RinkuDownloaderMenu(screen));
+                setScreen(new RinkuDownloaderScreen(screen));
                 info.cancel();
             } else if (RinkuDownloadListener.INSTANCE.isFailed()) {
                 LOGGER_RINKU.error("Rinku failed to initialize!");

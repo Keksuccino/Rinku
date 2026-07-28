@@ -24,7 +24,7 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 /** Performs the intentionally small platform, commit, and launch-file checks for one cache leaf. */
-final class RinkuJcefInstallationValidator {
+public final class RinkuJcefInstallationValidator {
     static final String COMPLETE_MARKER_FILE = ".complete";
     static final String DISTRIBUTION_MANIFEST_FILE = "DISTRIBUTION-MANIFEST.json";
 
@@ -36,7 +36,7 @@ final class RinkuJcefInstallationValidator {
     private RinkuJcefInstallationValidator() {
     }
 
-    static String normalizeCommit(String commit) {
+    public static String normalizeCommit(String commit) {
         if (commit == null) {
             throw new IllegalArgumentException("java-cef commit hash is missing");
         }

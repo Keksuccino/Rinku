@@ -1,10 +1,10 @@
 package de.keksuccino.rinku.mixins;
 
 import de.keksuccino.rinku.Rinku;
-import de.keksuccino.rinku.RinkuDownloader;
+import de.keksuccino.rinku.binarydownload.RinkuDownloader;
 import de.keksuccino.rinku.OSPlatform;
 import de.keksuccino.rinku.RinkuSettings;
-import de.keksuccino.rinku.internal.RinkuDownloadListener;
+import de.keksuccino.rinku.binarydownload.RinkuDownloadListener;
 import de.keksuccino.rinku.util.GameDirectoryUtils;
 import net.minecraft.client.resources.ClientPackSource;
 import org.slf4j.Logger;

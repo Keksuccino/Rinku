@@ -1,5 +1,6 @@
 package de.keksuccino.rinku;
 
+import de.keksuccino.rinku.binarydownload.RinkuDownloader;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
@@ -25,7 +26,7 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 /** Extracts a JCEF tarball into a new staging tree without following or replacing paths. */
-final class RinkuSecureArchiveExtractor {
+public final class RinkuSecureArchiveExtractor {
     private static final int BUFFER_SIZE_BYTES = 16 * 1024;
     private static final int MAX_ARCHIVE_ENTRIES = 200_000;
     static final int MAX_EXTRACTED_FILESYSTEM_ENTRIES = 8_000;
@@ -53,7 +54,7 @@ final class RinkuSecureArchiveExtractor {
         }
     }
 
-    static void extract(RinkuVerifiedArchiveSource archive, String expectedDigest, File outputDirectory, OSPlatform platform, RinkuDownloader.DownloadPolicy policy, Consumer<Float> progress) throws IOException {
+    public static void extract(RinkuVerifiedArchiveSource archive, String expectedDigest, File outputDirectory, OSPlatform platform, RinkuDownloader.DownloadPolicy policy, Consumer<Float> progress) throws IOException {
         Path outputRoot = outputDirectory.toPath().toAbsolutePath().normalize();
         if (!Files.isDirectory(outputRoot, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("Unsafe JCEF extraction directory " + outputRoot);

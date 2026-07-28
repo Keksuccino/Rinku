@@ -1,5 +1,6 @@
 package de.keksuccino.rinku;
 
+import de.keksuccino.rinku.binarydownload.RinkuDownloader;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

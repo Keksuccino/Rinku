@@ -23,7 +23,7 @@ import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
 /** Owns one locked, exact-commit JCEF installation attempt. */
-final class RinkuJcefInstaller implements AutoCloseable {
+public final class RinkuJcefInstaller implements AutoCloseable {
     private static final String CACHE_VERSION_DIRECTORY_NAME = "jcef-v1";
     private static final String LOCK_FILE_NAME = ".install.lock";
     private static final String STAGING_DIRECTORY_NAME = ".staging";
@@ -52,7 +52,7 @@ final class RinkuJcefInstaller implements AutoCloseable {
     private Path extractionDirectory;
     private boolean closed;
 
-    RinkuJcefInstaller(Path librariesDirectory, OSPlatform platform, String javaCefCommit, Consumer<IOException> cleanupWarning) throws IOException {
+    public RinkuJcefInstaller(Path librariesDirectory, OSPlatform platform, String javaCefCommit, Consumer<IOException> cleanupWarning) throws IOException {
         this.platform = Objects.requireNonNull(platform, "Rinku platform must not be null");
         this.javaCefCommit = RinkuJcefInstallationValidator.normalizeCommit(javaCefCommit);
         this.cleanupWarning = Objects.requireNonNull(cleanupWarning, "JCEF cleanup warning handler must not be null");
@@ -102,32 +102,32 @@ final class RinkuJcefInstaller implements AutoCloseable {
         return lockFile;
     }
 
-    Path candidateArchive() {
+    public Path candidateArchive() {
         requirePrepared();
         return candidateArchive;
     }
 
-    Path candidateChecksum() {
+    public Path candidateChecksum() {
         requirePrepared();
         return candidateChecksum;
     }
 
-    Path extractionDirectory() {
+    public Path extractionDirectory() {
         requirePrepared();
         return extractionDirectory;
     }
 
-    void recover() {
+    public void recover() {
         requireOpenAndOwner();
         cleanupAbandonedStagingBestEffort();
     }
 
-    Path findReusableInstallation() {
+    public Path findReusableInstallation() {
         requireOpenAndOwner();
         return RinkuJcefInstallationValidator.isReusable(installationDirectory, platform, javaCefCommit) ? installationDirectory : null;
     }
 
-    void prepareFresh() throws IOException {
+    public void prepareFresh() throws IOException {
         requireOpenAndOwner();
         if (stagingDirectory != null) {
             throw new IllegalStateException("A JCEF staging directory is already prepared");
@@ -144,7 +144,7 @@ final class RinkuJcefInstaller implements AutoCloseable {
         forceDirectoryBestEffort(stagingRootDirectory);
     }
 
-    void discardCandidateChecksum() throws IOException {
+    public void discardCandidateChecksum() throws IOException {
         requirePrepared();
         if (Files.exists(candidateChecksum, LinkOption.NOFOLLOW_LINKS) && !Files.isRegularFile(candidateChecksum, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("Unsafe candidate JCEF checksum path: " + candidateChecksum);
@@ -152,7 +152,7 @@ final class RinkuJcefInstaller implements AutoCloseable {
         Files.deleteIfExists(candidateChecksum);
     }
 
-    Path publish() throws IOException {
+    public Path publish() throws IOException {
         requirePrepared();
         Path stagedInstallation = extractionDirectory.resolve(platform.getNormalizedName());
         RinkuJcefInstallationValidator.validateExtracted(stagedInstallation, platform, javaCefCommit);
@@ -188,7 +188,7 @@ final class RinkuJcefInstaller implements AutoCloseable {
         return installationDirectory;
     }
 
-    void discardPrepared() throws IOException {
+    public void discardPrepared() throws IOException {
         requireOpenAndOwner();
         if (stagingDirectory == null) {
             return;

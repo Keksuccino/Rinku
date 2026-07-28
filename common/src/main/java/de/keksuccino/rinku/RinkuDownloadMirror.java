@@ -7,7 +7,7 @@ import java.util.Objects;
 import java.util.regex.Pattern;
 
 /** Strict parsing and path construction for a configured JCEF release mirror. */
-final class RinkuDownloadMirror {
+public final class RinkuDownloadMirror {
 
     private static final Pattern SAFE_PATH_SEGMENT = Pattern.compile("[A-Za-z0-9._+-]+");
     private final URI baseUri;
@@ -16,7 +16,7 @@ final class RinkuDownloadMirror {
         this.baseUri = baseUri;
     }
 
-    static RinkuDownloadMirror parse(String value) {
+    public static RinkuDownloadMirror parse(String value) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException("JCEF mirror URI is missing");
         }
@@ -55,7 +55,7 @@ final class RinkuDownloadMirror {
         }
     }
 
-    URI assetUri(String releaseTag, String assetName) {
+    public URI assetUri(String releaseTag, String assetName) {
         validatePathSegment(releaseTag, "release tag");
         validatePathSegment(assetName, "asset name");
         String basePath = baseUri.getPath();
@@ -67,11 +67,11 @@ final class RinkuDownloadMirror {
         }
     }
 
-    String externalForm() {
+    public String externalForm() {
         return baseUri.toASCIIString();
     }
 
-    String safeLogIdentity() {
+    public String safeLogIdentity() {
         return baseUri.getScheme() + "://" + baseUri.getRawAuthority();
     }
 

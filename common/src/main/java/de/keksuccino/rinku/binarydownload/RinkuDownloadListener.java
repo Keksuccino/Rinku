@@ -1,4 +1,4 @@
-package de.keksuccino.rinku.internal;
+package de.keksuccino.rinku.binarydownload;
 
 import org.spongepowered.asm.mixin.Unique;
 
