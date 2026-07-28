@@ -29,17 +29,6 @@ final class RinkuDownloadHandlerRelay implements CefDownloadHandler {
     }
 
     @Override
-    @Deprecated
-    public void onBeforeDownload(CefBrowser browser, CefDownloadItem downloadItem, String suggestedName, CefBeforeDownloadCallback callback) {
-        CefDownloadHandler currentHandler = handler.get();
-        if (currentHandler == null) {
-            continueWithSaveDialog(suggestedName, callback);
-            return;
-        }
-        currentHandler.onBeforeDownload(browser, downloadItem, suggestedName, callback);
-    }
-
-    @Override
     public boolean onBeforeDownloadWithDecision(CefBrowser browser, CefDownloadItem downloadItem, String suggestedName, CefBeforeDownloadCallback callback) {
         CefDownloadHandler currentHandler = handler.get();
         if (currentHandler != null) return currentHandler.onBeforeDownloadWithDecision(browser, downloadItem, suggestedName, callback);

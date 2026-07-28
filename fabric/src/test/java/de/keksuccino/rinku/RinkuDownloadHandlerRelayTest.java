@@ -68,25 +68,6 @@ class RinkuDownloadHandlerRelayTest {
     }
 
     @Test
-    void preservesLegacyBeforeDownloadHandlers() {
-        RinkuDownloadHandlerRelay relay = new RinkuDownloadHandlerRelay();
-        AtomicInteger legacyCalls = new AtomicInteger();
-        relay.addHandler(new CefDownloadHandler() {
-            @Override
-            @Deprecated
-            public void onBeforeDownload(CefBrowser browser, CefDownloadItem downloadItem, String suggestedName, CefBeforeDownloadCallback callback) {
-                legacyCalls.incrementAndGet();
-            }
-
-            @Override
-            public void onDownloadUpdated(CefBrowser browser, CefDownloadItem downloadItem, CefDownloadItemCallback callback) {}
-        });
-
-        assertTrue(relay.onBeforeDownloadWithDecision(null, null, "archive.zip", (path, showDialog) -> {}));
-        assertEquals(1, legacyCalls.get());
-    }
-
-    @Test
     void keepsTheFirstRegisteredHandlerAsTheSoleCallbackOwner() {
         RinkuDownloadHandlerRelay relay = new RinkuDownloadHandlerRelay();
         AtomicInteger firstUpdates = new AtomicInteger();

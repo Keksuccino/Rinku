@@ -53,7 +53,6 @@ class RinkuDownloadMirrorTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     void downloaderPoliciesSelectOnlyStrictCanonicalMirrors() {
         String commit = JcefRuntimeIdentity.JAVA_CEF_COMMIT;
         RinkuDownloader official = new RinkuDownloader("https://user:secret@example.com/private?token=secret", OSPlatform.MACOS_ARM64, policy(RinkuDownloader.MirrorPolicy.OFFICIAL_ONLY));
@@ -66,7 +65,6 @@ class RinkuDownloadMirrorTest {
         assertEquals(RinkuDownloader.OFFICIAL_MIRROR + "/java-cef-" + commit + "/macos_arm64.tar.gz", invalidPreferred.getJavaCefDownloadUrl());
         assertThrows(IllegalArgumentException.class, () -> new RinkuDownloader("https://example.com/private?token=secret", OSPlatform.MACOS_ARM64, policy(RinkuDownloader.MirrorPolicy.CONFIGURED_ONLY)));
         assertThrows(IllegalArgumentException.class, () -> new RinkuDownloader("", OSPlatform.MACOS_ARM64, policy(RinkuDownloader.MirrorPolicy.CONFIGURED_ONLY)));
-        assertThrows(IllegalArgumentException.class, () -> new RinkuDownloader(RinkuDownloader.OFFICIAL_MIRROR, "0".repeat(40), OSPlatform.MACOS_ARM64));
     }
 
     private static RinkuDownloader.DownloadPolicy policy(RinkuDownloader.MirrorPolicy mirrorPolicy) {

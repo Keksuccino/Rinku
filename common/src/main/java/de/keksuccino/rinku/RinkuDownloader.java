@@ -83,18 +83,6 @@ public class RinkuDownloader {
         this(host, JcefRuntimeIdentity.JAVA_CEF_COMMIT, platform, downloadPolicy, null, null, null);
     }
 
-    /** @deprecated The JCEF commit is fixed when Rinku is compiled and can no longer be selected at runtime. */
-    @Deprecated
-    public RinkuDownloader(String host, String javaCefCommitHash, OSPlatform platform) {
-        this(host, requireCompiledCommit(javaCefCommitHash), platform, DownloadPolicy.defaults(), null, null, null);
-    }
-
-    /** @deprecated The JCEF commit is fixed when Rinku is compiled and can no longer be selected at runtime. */
-    @Deprecated
-    public RinkuDownloader(String host, String javaCefCommitHash, OSPlatform platform, DownloadPolicy downloadPolicy) {
-        this(host, requireCompiledCommit(javaCefCommitHash), platform, downloadPolicy, null, null, null);
-    }
-
     RinkuDownloader(String host, String javaCefCommitHash, OSPlatform platform, DownloadPolicy downloadPolicy, Path librariesDirectory, ArtifactDownloader artifactDownloader, ArchiveExtractor archiveExtractor) {
         this.javaCefCommitHash = RinkuJcefInstallationValidator.normalizeCommit(javaCefCommitHash);
         this.platform = Objects.requireNonNull(platform, "Rinku platform must not be null");
@@ -104,14 +92,6 @@ public class RinkuDownloader {
         librariesDirectoryOverride = librariesDirectory == null ? null : librariesDirectory.toAbsolutePath().normalize();
         this.artifactDownloader = artifactDownloader;
         this.archiveExtractor = archiveExtractor;
-    }
-
-    private static String requireCompiledCommit(String requestedCommit) {
-        String normalized = RinkuJcefInstallationValidator.normalizeCommit(requestedCommit);
-        if (!JcefRuntimeIdentity.JAVA_CEF_COMMIT.equals(normalized)) {
-            throw new IllegalArgumentException("Rinku was compiled for java-cef commit " + JcefRuntimeIdentity.JAVA_CEF_COMMIT + " and cannot load " + normalized);
-        }
-        return normalized;
     }
 
     public String getHost() {
@@ -162,12 +142,6 @@ public class RinkuDownloader {
             }
             throw asIOExceptionOrThrowRuntime(lastFailure);
         }
-    }
-
-    /** @deprecated Downloaded archives now exist only in disposable staging and are always removed. */
-    @Deprecated
-    public InstallationResult installOrUpdate(boolean skipDownload, boolean deleteArchive) throws IOException {
-        return installOrUpdate(skipDownload);
     }
 
     /** Removes abandoned same-filesystem staging directories without touching any commit leaf. */

@@ -205,12 +205,6 @@ public class RinkuClient implements CefLoadHandler, CefContextMenuHandler, CefDi
     }
 
     @Override
-    @Deprecated
-    public void onBeforeDownload(CefBrowser browser, CefDownloadItem downloadItem, String suggestedName, CefBeforeDownloadCallback callback) {
-        downloadHandlerRelay.onBeforeDownload(browser, downloadItem, suggestedName, callback);
-    }
-
-    @Override
     public boolean onBeforeDownloadWithDecision(CefBrowser browser, CefDownloadItem downloadItem, String suggestedName, CefBeforeDownloadCallback callback) {
         return downloadHandlerRelay.onBeforeDownloadWithDecision(browser, downloadItem, suggestedName, callback);
     }
