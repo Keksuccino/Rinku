@@ -24,11 +24,11 @@ final class CefUtil {
 
     private static final Logger LOGGER = LogUtils.getLogger();
 
-    private CefUtil() {}
-
     private static boolean init;
     private static CefApp cefAppInstance;
     private static CefClient cefClientInstance;
+
+    private CefUtil() {}
 
     static void addUnixExecutePermissions(Path file) throws IOException {
         PosixFileAttributeView posixView = Files.getFileAttributeView(file, PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
