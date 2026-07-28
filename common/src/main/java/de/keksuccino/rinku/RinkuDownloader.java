@@ -85,33 +85,33 @@ public class RinkuDownloader {
     private final String host;
     private final RinkuDownloadMirror configuredMirror;
     private final String javaCefCommitHash;
-    private final RinkuPlatform platform;
+    private final OSPlatform platform;
     private final DownloadPolicy downloadPolicy;
     private final Path librariesDirectoryOverride;
     private final ArtifactDownloader artifactDownloader;
     private final ArchiveExtractor archiveExtractor;
 
-    public RinkuDownloader(String host, RinkuPlatform platform) {
+    public RinkuDownloader(String host, OSPlatform platform) {
         this(host, JcefRuntimeIdentity.JAVA_CEF_COMMIT, platform, DownloadPolicy.defaults(), null, null, null);
     }
 
-    public RinkuDownloader(String host, RinkuPlatform platform, DownloadPolicy downloadPolicy) {
+    public RinkuDownloader(String host, OSPlatform platform, DownloadPolicy downloadPolicy) {
         this(host, JcefRuntimeIdentity.JAVA_CEF_COMMIT, platform, downloadPolicy, null, null, null);
     }
 
     /** @deprecated The JCEF commit is fixed when Rinku is compiled and can no longer be selected at runtime. */
     @Deprecated
-    public RinkuDownloader(String host, String javaCefCommitHash, RinkuPlatform platform) {
+    public RinkuDownloader(String host, String javaCefCommitHash, OSPlatform platform) {
         this(host, requireCompiledCommit(javaCefCommitHash), platform, DownloadPolicy.defaults(), null, null, null);
     }
 
     /** @deprecated The JCEF commit is fixed when Rinku is compiled and can no longer be selected at runtime. */
     @Deprecated
-    public RinkuDownloader(String host, String javaCefCommitHash, RinkuPlatform platform, DownloadPolicy downloadPolicy) {
+    public RinkuDownloader(String host, String javaCefCommitHash, OSPlatform platform, DownloadPolicy downloadPolicy) {
         this(host, requireCompiledCommit(javaCefCommitHash), platform, downloadPolicy, null, null, null);
     }
 
-    RinkuDownloader(String host, String javaCefCommitHash, RinkuPlatform platform, DownloadPolicy downloadPolicy, Path librariesDirectory, ArtifactDownloader artifactDownloader, ArchiveExtractor archiveExtractor) {
+    RinkuDownloader(String host, String javaCefCommitHash, OSPlatform platform, DownloadPolicy downloadPolicy, Path librariesDirectory, ArtifactDownloader artifactDownloader, ArchiveExtractor archiveExtractor) {
         this.javaCefCommitHash = RinkuJcefInstallationValidator.normalizeCommit(javaCefCommitHash);
         this.platform = Objects.requireNonNull(platform, "Rinku platform must not be null");
         this.downloadPolicy = downloadPolicy == null ? DownloadPolicy.defaults() : downloadPolicy;

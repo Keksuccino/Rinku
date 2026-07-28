@@ -162,7 +162,7 @@ class RinkuArchiveExtractionTest {
     @Test
     void linuxArchiveModesBecomeCanonicalAndSpecialBitsAreStripped() throws Exception {
         assumePosixFileStore();
-        RinkuPlatform platform = RinkuPlatform.LINUX_AMD64;
+        OSPlatform platform = OSPlatform.LINUX_AMD64;
         String rootName = platform.getNormalizedName();
         byte[] archive;
         try (RinkuInstallerTestSupport.TarBuilder builder = new RinkuInstallerTestSupport.TarBuilder()) {
@@ -185,7 +185,7 @@ class RinkuArchiveExtractionTest {
     @Test
     void macArchiveModesCoverLauncherFrameworkAndEveryHelper() throws Exception {
         assumePosixFileStore();
-        RinkuPlatform platform = RinkuPlatform.MACOS_ARM64;
+        OSPlatform platform = OSPlatform.MACOS_ARM64;
         String rootName = platform.getNormalizedName();
         List<String> executablePaths = List.of("jcef_app.app/Contents/MacOS/JavaAppLauncher", "jcef_app.app/Contents/Frameworks/Chromium Embedded Framework.framework/Chromium Embedded Framework", "jcef_app.app/Contents/Frameworks/jcef Helper.app/Contents/MacOS/jcef Helper", "jcef_app.app/Contents/Frameworks/jcef Helper (Alerts).app/Contents/MacOS/jcef Helper (Alerts)", "jcef_app.app/Contents/Frameworks/jcef Helper (GPU).app/Contents/MacOS/jcef Helper (GPU)", "jcef_app.app/Contents/Frameworks/jcef Helper (Plugin).app/Contents/MacOS/jcef Helper (Plugin)", "jcef_app.app/Contents/Frameworks/jcef Helper (Renderer).app/Contents/MacOS/jcef Helper (Renderer)");
         byte[] archive;
@@ -209,7 +209,7 @@ class RinkuArchiveExtractionTest {
     @Test
     void windowsTargetLeavesHostFileCreationModesUnchanged() throws Exception {
         assumePosixFileStore();
-        RinkuPlatform platform = RinkuPlatform.WINDOWS_AMD64;
+        OSPlatform platform = OSPlatform.WINDOWS_AMD64;
         String rootName = platform.getNormalizedName();
         byte[] archive;
         try (RinkuInstallerTestSupport.TarBuilder builder = new RinkuInstallerTestSupport.TarBuilder()) {
@@ -234,7 +234,7 @@ class RinkuArchiveExtractionTest {
         return failure;
     }
 
-    private Path extractDirectly(String name, byte[] archive, RinkuPlatform platform) throws Exception {
+    private Path extractDirectly(String name, byte[] archive, OSPlatform platform) throws Exception {
         Path directory = temporaryDirectory.resolve(name);
         Path output = directory.resolve("output");
         Files.createDirectories(output);

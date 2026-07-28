@@ -62,7 +62,7 @@ final class CefUtil {
         }
     }
 
-    static List<Path> unixExecutablePaths(Path installation, RinkuPlatform platform) {
+    static List<Path> unixExecutablePaths(Path installation, OSPlatform platform) {
         if (platform.isLinux()) {
             return List.of(installation.resolve("jcef_helper"), installation.resolve("chrome-sandbox"));
         }
@@ -74,7 +74,7 @@ final class CefUtil {
         return List.of(contents.resolve("MacOS/JavaAppLauncher"), frameworks.resolve("Chromium Embedded Framework.framework/Chromium Embedded Framework"), frameworks.resolve("jcef Helper.app/Contents/MacOS/jcef Helper"), frameworks.resolve("jcef Helper (Alerts).app/Contents/MacOS/jcef Helper (Alerts)"), frameworks.resolve("jcef Helper (GPU).app/Contents/MacOS/jcef Helper (GPU)"), frameworks.resolve("jcef Helper (Plugin).app/Contents/MacOS/jcef Helper (Plugin)"), frameworks.resolve("jcef Helper (Renderer).app/Contents/MacOS/jcef Helper (Renderer)"));
     }
 
-    private static void ensureUnixExecutables(Path installation, RinkuPlatform platform) {
+    private static void ensureUnixExecutables(Path installation, OSPlatform platform) {
         for (Path file : unixExecutablePaths(installation, platform)) {
             try {
                 addUnixExecutePermissions(file);
@@ -85,7 +85,7 @@ final class CefUtil {
     }
 
     static boolean init() {
-        RinkuPlatform platform = RinkuPlatform.getPlatform();
+        OSPlatform platform = OSPlatform.getPlatform();
         String configuredJcefPath = System.getProperty("jcef.path");
         if (configuredJcefPath == null || configuredJcefPath.isBlank()) {
             LOGGER.error("JCEF installation path is unavailable; the downloader must finish before CEF initialization.");
@@ -168,7 +168,7 @@ final class CefUtil {
     }
 
     private static Path resolvePersistentDataRoot() {
-        RinkuPlatform platform = RinkuPlatform.getPlatform();
+        OSPlatform platform = OSPlatform.getPlatform();
         String userHome = System.getProperty("user.home", ".");
 
         if (platform.isWindows()) {

@@ -21,7 +21,7 @@ import java.util.Map;
 final class RinkuInstallerTestSupport {
     static final String COMMIT_A = "0123456789abcdef0123456789abcdef01234567";
     static final String COMMIT_B = "89abcdef0123456789abcdef0123456789abcdef";
-    static final RinkuPlatform PLATFORM = RinkuPlatform.MACOS_ARM64;
+    static final OSPlatform PLATFORM = OSPlatform.MACOS_ARM64;
     private static final String[] MAC_HELPERS = {"jcef Helper", "jcef Helper (Alerts)", "jcef Helper (GPU)", "jcef Helper (Plugin)", "jcef Helper (Renderer)"};
     private static final List<String> COMMON_RUNTIME_ROOTS = List.of("chrome_100_percent.pak", "chrome_200_percent.pak", "icudtl.dat", "locales", "resources.pak", "v8_context_snapshot.bin");
     private static final List<String> LINUX_RUNTIME_ROOTS = List.of("chrome-sandbox", "jcef_helper", "libEGL.so", "libGLESv2.so", "libcef.so", "libjcef.so", "libvk_swiftshader.so", "libvulkan.so.1", "vk_swiftshader_icd.json");
@@ -56,11 +56,11 @@ final class RinkuInstallerTestSupport {
         return (archive, outputDirectory) -> writeRuntimeInstallation(outputDirectory.toPath().resolve(PLATFORM.getNormalizedName()), PLATFORM, version, commit);
     }
 
-    static Path installationDirectory(Path librariesDirectory, RinkuPlatform platform, String commit) {
+    static Path installationDirectory(Path librariesDirectory, OSPlatform platform, String commit) {
         return librariesDirectory.toAbsolutePath().normalize().resolve("jcef-v1").resolve(platform.getNormalizedName()).resolve(RinkuJcefInstallationValidator.normalizeCommit(commit));
     }
 
-    static void writeRuntimeInstallation(Path installation, RinkuPlatform platform, String version, String commit) throws IOException {
+    static void writeRuntimeInstallation(Path installation, OSPlatform platform, String version, String commit) throws IOException {
         Map<String, byte[]> runtimeFiles = runtimeFiles(platform, version);
         Map<String, byte[]> distributionFiles = distributionFiles(platform, runtimeFiles, version);
         for (Map.Entry<String, byte[]> distributionFile : distributionFiles.entrySet()) {
@@ -110,17 +110,17 @@ final class RinkuInstallerTestSupport {
         }
     }
 
-    static String manifestJson(RinkuPlatform platform, String commit, Map<String, byte[]> runtimeFiles, String version) {
+    static String manifestJson(OSPlatform platform, String commit, Map<String, byte[]> runtimeFiles, String version) {
         Map<String, byte[]> distributionFiles = distributionFiles(platform, runtimeFiles, version);
         return manifestJson(platform, commit, runtimeFiles, runtimeEntries(platform), distributionFiles, distributionDirectories(distributionFiles));
     }
 
-    static String manifestJson(RinkuPlatform platform, String commit, Map<String, byte[]> runtimeFiles, List<String> entries, String version) {
+    static String manifestJson(OSPlatform platform, String commit, Map<String, byte[]> runtimeFiles, List<String> entries, String version) {
         Map<String, byte[]> distributionFiles = distributionFiles(platform, runtimeFiles, version);
         return manifestJson(platform, commit, runtimeFiles, entries, distributionFiles, distributionDirectories(distributionFiles));
     }
 
-    static String manifestJson(RinkuPlatform platform, String commit, Map<String, byte[]> runtimeFiles, List<String> entries, Map<String, byte[]> distributionFiles, List<String> distributionDirectories) {
+    static String manifestJson(OSPlatform platform, String commit, Map<String, byte[]> runtimeFiles, List<String> entries, Map<String, byte[]> distributionFiles, List<String> distributionDirectories) {
         List<String> jogampJars = jogampJars(platform);
         StringBuilder json = new StringBuilder();
         json.append("{\n");
@@ -131,7 +131,7 @@ final class RinkuInstallerTestSupport {
         appendManifestFiles(json, "distribution_files", distributionFiles);
         json.append("  \"java_cef_commit\": \"").append(commit).append("\",\n");
         json.append("  \"java_release\": 17,\n");
-        json.append("  \"jogl_swing_osr_supported\": ").append(platform != RinkuPlatform.WINDOWS_ARM64).append(",\n");
+        json.append("  \"jogl_swing_osr_supported\": ").append(platform != OSPlatform.WINDOWS_ARM64).append(",\n");
         json.append("  \"jogamp_jars\": ").append(jsonStringArray(jogampJars)).append(",\n");
         json.append("  \"jcef_jars\": [\"jcef.jar\", \"jcef-tests.jar\"],\n");
         json.append("  \"manifest_schema\": 2,\n");
@@ -142,13 +142,13 @@ final class RinkuInstallerTestSupport {
         return json.toString();
     }
 
-    static Map<String, byte[]> distributionFiles(RinkuPlatform platform, Map<String, byte[]> runtimeFiles, String version) {
+    static Map<String, byte[]> distributionFiles(OSPlatform platform, Map<String, byte[]> runtimeFiles, String version) {
         Map<String, byte[]> files = new LinkedHashMap<>(runtimeFiles);
         files.putAll(canonicalAncillaryFiles(platform, version));
         return files.entrySet().stream().sorted(Map.Entry.comparingByKey()).collect(LinkedHashMap::new, (result, entry) -> result.put(entry.getKey(), entry.getValue()), LinkedHashMap::putAll);
     }
 
-    private static Map<String, byte[]> canonicalAncillaryFiles(RinkuPlatform platform, String version) {
+    private static Map<String, byte[]> canonicalAncillaryFiles(OSPlatform platform, String version) {
         Map<String, byte[]> files = new LinkedHashMap<>();
         for (String name : List.of("CEF-LICENSE.txt", "CREDITS.html", "LICENSE.txt")) {
             files.put(name, bytes(name + "-" + version));
@@ -197,7 +197,7 @@ final class RinkuInstallerTestSupport {
         json.append("  ],\n");
     }
 
-    static Map<String, byte[]> runtimeFiles(RinkuPlatform platform, String version) {
+    static Map<String, byte[]> runtimeFiles(OSPlatform platform, String version) {
         Map<String, byte[]> files = new LinkedHashMap<>();
         if (platform.isMacOS()) {
             String app = "jcef_app.app/Contents/";
@@ -222,7 +222,7 @@ final class RinkuInstallerTestSupport {
             files.put(framework + "Resources/chrome_200_percent.pak", bytes("chrome-200-" + version));
             files.put(framework + "Resources/resources.pak", bytes("resources-" + version));
             files.put(framework + "Resources/icudtl.dat", bytes("icu-data-" + version));
-            files.put(framework + "Resources/v8_context_snapshot." + (platform == RinkuPlatform.MACOS_AMD64 ? "x86_64" : "arm64") + ".bin", bytes("snapshot-" + version));
+            files.put(framework + "Resources/v8_context_snapshot." + (platform == OSPlatform.MACOS_AMD64 ? "x86_64" : "arm64") + ".bin", bytes("snapshot-" + version));
             files.put(framework + "Resources/en.lproj/locale.pak", bytes("locale-" + version));
             for (String helper : MAC_HELPERS) {
                 String helperRoot = app + "Frameworks/" + helper + ".app/Contents/";
@@ -243,13 +243,13 @@ final class RinkuInstallerTestSupport {
         return files;
     }
 
-    static List<String> runtimeEntries(RinkuPlatform platform) {
+    static List<String> runtimeEntries(OSPlatform platform) {
         if (platform.isMacOS()) {
             return List.of("jcef_app.app");
         }
         List<String> entries = new ArrayList<>(COMMON_RUNTIME_ROOTS);
         entries.addAll(platform.isLinux() ? LINUX_RUNTIME_ROOTS : WINDOWS_RUNTIME_ROOTS);
-        if (platform == RinkuPlatform.WINDOWS_AMD64) {
+        if (platform == OSPlatform.WINDOWS_AMD64) {
             entries.add("dxcompiler.dll");
             entries.add("dxil.dll");
         }
@@ -257,7 +257,7 @@ final class RinkuInstallerTestSupport {
         return List.copyOf(entries);
     }
 
-    private static List<String> jogampJars(RinkuPlatform platform) {
+    private static List<String> jogampJars(OSPlatform platform) {
         String suffix = switch (platform) {
             case LINUX_AMD64 -> "linux-amd64";
             case LINUX_ARM64 -> "linux-aarch64";

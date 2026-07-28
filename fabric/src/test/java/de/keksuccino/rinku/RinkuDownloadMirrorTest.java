@@ -56,17 +56,17 @@ class RinkuDownloadMirrorTest {
     @SuppressWarnings("deprecation")
     void downloaderPoliciesSelectOnlyStrictCanonicalMirrors() {
         String commit = JcefRuntimeIdentity.JAVA_CEF_COMMIT;
-        RinkuDownloader official = new RinkuDownloader("https://user:secret@example.com/private?token=secret", RinkuPlatform.MACOS_ARM64, policy(RinkuDownloader.MirrorPolicy.OFFICIAL_ONLY));
-        RinkuDownloader preferred = new RinkuDownloader("HTTPS://Mirror.Example:8443/private/releases/", RinkuPlatform.MACOS_ARM64, policy(RinkuDownloader.MirrorPolicy.PREFER_CONFIGURED));
-        RinkuDownloader invalidPreferred = new RinkuDownloader("https://example.com/private?token=secret", RinkuPlatform.MACOS_ARM64, policy(RinkuDownloader.MirrorPolicy.PREFER_CONFIGURED));
+        RinkuDownloader official = new RinkuDownloader("https://user:secret@example.com/private?token=secret", OSPlatform.MACOS_ARM64, policy(RinkuDownloader.MirrorPolicy.OFFICIAL_ONLY));
+        RinkuDownloader preferred = new RinkuDownloader("HTTPS://Mirror.Example:8443/private/releases/", OSPlatform.MACOS_ARM64, policy(RinkuDownloader.MirrorPolicy.PREFER_CONFIGURED));
+        RinkuDownloader invalidPreferred = new RinkuDownloader("https://example.com/private?token=secret", OSPlatform.MACOS_ARM64, policy(RinkuDownloader.MirrorPolicy.PREFER_CONFIGURED));
 
         assertEquals(RinkuDownloader.OFFICIAL_MIRROR + "/java-cef-" + commit + "/macos_arm64.tar.gz", official.getJavaCefDownloadUrl());
         assertEquals("https://mirror.example:8443/private/releases", preferred.getHost());
         assertEquals("https://mirror.example:8443/private/releases/java-cef-" + commit + "/macos_arm64.tar.gz.sha256", preferred.getJavaCefChecksumDownloadUrl());
         assertEquals(RinkuDownloader.OFFICIAL_MIRROR + "/java-cef-" + commit + "/macos_arm64.tar.gz", invalidPreferred.getJavaCefDownloadUrl());
-        assertThrows(IllegalArgumentException.class, () -> new RinkuDownloader("https://example.com/private?token=secret", RinkuPlatform.MACOS_ARM64, policy(RinkuDownloader.MirrorPolicy.CONFIGURED_ONLY)));
-        assertThrows(IllegalArgumentException.class, () -> new RinkuDownloader("", RinkuPlatform.MACOS_ARM64, policy(RinkuDownloader.MirrorPolicy.CONFIGURED_ONLY)));
-        assertThrows(IllegalArgumentException.class, () -> new RinkuDownloader(RinkuDownloader.OFFICIAL_MIRROR, "0".repeat(40), RinkuPlatform.MACOS_ARM64));
+        assertThrows(IllegalArgumentException.class, () -> new RinkuDownloader("https://example.com/private?token=secret", OSPlatform.MACOS_ARM64, policy(RinkuDownloader.MirrorPolicy.CONFIGURED_ONLY)));
+        assertThrows(IllegalArgumentException.class, () -> new RinkuDownloader("", OSPlatform.MACOS_ARM64, policy(RinkuDownloader.MirrorPolicy.CONFIGURED_ONLY)));
+        assertThrows(IllegalArgumentException.class, () -> new RinkuDownloader(RinkuDownloader.OFFICIAL_MIRROR, "0".repeat(40), OSPlatform.MACOS_ARM64));
     }
 
     private static RinkuDownloader.DownloadPolicy policy(RinkuDownloader.MirrorPolicy mirrorPolicy) {

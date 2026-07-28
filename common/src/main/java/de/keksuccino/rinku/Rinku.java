@@ -3,39 +3,137 @@ package de.keksuccino.rinku;
 import de.keksuccino.rinku.listeners.RinkuInitListener;
 import de.keksuccino.rinku.mixins.MixinGui;
 import com.mojang.blaze3d.systems.RenderSystem;
+import de.keksuccino.rinku.platform.Services;
 import net.minecraft.client.Minecraft;
 import org.cef.misc.CefCursorType;
+import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 import com.mojang.logging.LogUtils;
 import java.io.IOException;
 import java.util.*;
 
-/**
- * An API to create Chromium web browsers in Minecraft.
- * Uses a modified version of java-cef (Java Chromium Embedded Framework).
- */
 public final class Rinku {
 
     private static final Logger LOGGER = LogUtils.getLogger();
     public static final String MOD_ID = "rinku";
+    public static final String VERSION = "3.0.0";
 
-    private static RinkuSettings settings;
-    private static volatile RinkuApp app;
-    private static volatile RinkuClient client;
     private static final RinkuInitializationController INITIALIZATION_CONTROLLER = new RinkuInitializationController();
-
+    private static final HashMap<CefCursorType, Long> CEF_TO_GLFW_CURSORS = new HashMap<>();
     private static final ArrayList<RinkuInitListener> awaitingInit = new ArrayList<>();
     private static final String PRELOADED_BROWSER_START_URL = "about:blank";
     private static final Object PRELOADED_BROWSER_POOL_LOCK = new Object();
     private static final Deque<RinkuBrowser> PRELOADED_TRANSPARENT_BROWSERS = new ArrayDeque<>();
     private static final Deque<RinkuBrowser> PRELOADED_OPAQUE_BROWSERS = new ArrayDeque<>();
+
+    private static RinkuSettings settings;
+    private static volatile RinkuApp app;
+    private static volatile RinkuClient client;
     private static int preloadTransparentInFlight;
     private static int preloadOpaqueInFlight;
     private static boolean preloadPoolClosed = true;
 
+    /**
+     * This gets called by {@link MixinGui}.
+     * This should not be called by anything else.
+     */
+    public static boolean initialize() {
+
+        synchronized (INITIALIZATION_CONTROLLER) {
+
+            RinkuInitializationController.BeginResult beginResult = INITIALIZATION_CONTROLLER.beginInitialization();
+
+            if (beginResult == RinkuInitializationController.BeginResult.ALREADY_INITIALIZED) return true;
+            if (beginResult == RinkuInitializationController.BeginResult.REJECTED) return false;
+
+            try {
+
+                LOGGER.info("[RINKU] Loading v" + Rinku.VERSION + " on " + Services.PLATFORM.getPlatformDisplayName() + " (" + OSPlatform.getPlatform().getNormalizedName() + ")..");
+
+                if (CefUtil.init()) {
+
+                    app = new RinkuApp(CefUtil.getCefApp());
+                    client = new RinkuClient(CefUtil.getCefClient());
+
+                    INITIALIZATION_CONTROLLER.markInitialized();
+
+                    List<RinkuBrowser> stalePreloadedBrowsers = new ArrayList<>();
+                    synchronized (PRELOADED_BROWSER_POOL_LOCK) {
+                        stalePreloadedBrowsers.addAll(PRELOADED_TRANSPARENT_BROWSERS);
+                        stalePreloadedBrowsers.addAll(PRELOADED_OPAQUE_BROWSERS);
+                        PRELOADED_TRANSPARENT_BROWSERS.clear();
+                        PRELOADED_OPAQUE_BROWSERS.clear();
+                        preloadTransparentInFlight = 0;
+                        preloadOpaqueInFlight = 0;
+                        preloadPoolClosed = false;
+                    }
+                    for (RinkuBrowser browser : stalePreloadedBrowsers) closeBrowserQuietly(browser);
+
+                    awaitingInit.forEach(t -> t.onInit(true));
+                    awaitingInit.clear();
+
+                    LOGGER.info("[RINKU] Successfully initialized!");
+
+                    app.getHandle().registerSchemeHandlerFactory("mod", "", (browser, frame, url, request) -> new ModScheme(request.getURL()));
+                    prefillPreloadedBrowserPoolsAsync();
+
+                    // These callbacks are important because JCEF helper processes can otherwise
+                    // survive the game. Rinku's lifecycle gate makes every shutdown path idempotent.
+                    OSPlatform platform = OSPlatform.getPlatform();
+                    if (platform.isLinux() || platform.isWindows()) {
+                        Runtime.getRuntime().addShutdownHook(new Thread(Rinku::shutdown, "Rinku-Shutdown"));
+                    } else if (platform.isMacOS()) {
+                        CefUtil.getCefApp().macOSTerminationRequestRunnable = () -> {
+                            shutdown();
+                            Minecraft.getInstance().stop();
+                        };
+                    }
+
+                    return true;
+
+                }
+
+                awaitingInit.forEach(t -> t.onInit(false));
+                awaitingInit.clear();
+
+                LOGGER.error("[RINKU] Failed to initialize!", new Throwable("Something happened, but what exactly is _very unclear_."));
+
+                shutdownLocked();
+
+                return false;
+
+            } catch (RuntimeException | Error failure) {
+                shutdownLocked();
+                throw failure;
+            }
+
+        }
+
+    }
+
     public static void scheduleForInit(RinkuInitListener task) {
         awaitingInit.add(task);
+    }
+
+    /**
+     * Check if Rinku is initialized.
+     * @return true if Rinku is initialized correctly, false if not
+     */
+    public static boolean isInitialized() {
+        return INITIALIZATION_CONTROLLER.isInitialized();
+    }
+
+    /** Returns whether a new CEF initialization attempt may be scheduled. */
+    public static boolean isInitializationAllowed() {
+        return INITIALIZATION_CONTROLLER.canInitialize();
+    }
+
+    /**
+     * Check if Rinku has been initialized, throws a {@link RuntimeException} if not.
+     */
+    public static void assertInitialized() {
+        if (!isInitialized()) throw new RuntimeException("Rinku was never initialized.");
     }
 
     /**
@@ -52,67 +150,6 @@ public final class Rinku {
             }
         }
         return settings;
-    }
-
-    /**
-     * This gets called by {@link MixinGui}.
-     * This should not be called by anything else.
-     */
-    public static boolean initialize() {
-        synchronized (INITIALIZATION_CONTROLLER) {
-            RinkuInitializationController.BeginResult beginResult = INITIALIZATION_CONTROLLER.beginInitialization();
-            if (beginResult == RinkuInitializationController.BeginResult.ALREADY_INITIALIZED) return true;
-            if (beginResult == RinkuInitializationController.BeginResult.REJECTED) return false;
-
-            try {
-                LOGGER.info("Initializing CEF on " + RinkuPlatform.getPlatform().getNormalizedName() + "...");
-                if (CefUtil.init()) {
-                    app = new RinkuApp(CefUtil.getCefApp());
-                    client = new RinkuClient(CefUtil.getCefClient());
-                    INITIALIZATION_CONTROLLER.markInitialized();
-                    List<RinkuBrowser> stalePreloadedBrowsers = new ArrayList<>();
-                    synchronized (PRELOADED_BROWSER_POOL_LOCK) {
-                        stalePreloadedBrowsers.addAll(PRELOADED_TRANSPARENT_BROWSERS);
-                        stalePreloadedBrowsers.addAll(PRELOADED_OPAQUE_BROWSERS);
-                        PRELOADED_TRANSPARENT_BROWSERS.clear();
-                        PRELOADED_OPAQUE_BROWSERS.clear();
-                        preloadTransparentInFlight = 0;
-                        preloadOpaqueInFlight = 0;
-                        preloadPoolClosed = false;
-                    }
-                    for (RinkuBrowser browser : stalePreloadedBrowsers) closeBrowserQuietly(browser);
-
-                    awaitingInit.forEach(t -> t.onInit(true));
-                    awaitingInit.clear();
-                    LOGGER.info("Chromium Embedded Framework initialized");
-
-                    app.getHandle().registerSchemeHandlerFactory("mod", "", (browser, frame, url, request) -> new ModScheme(request.getURL()));
-                    prefillPreloadedBrowserPoolsAsync();
-
-                    // These callbacks are important because JCEF helper processes can otherwise
-                    // survive the game. Rinku's lifecycle gate makes every shutdown path idempotent.
-                    RinkuPlatform platform = RinkuPlatform.getPlatform();
-                    if (platform.isLinux() || platform.isWindows()) {
-                        Runtime.getRuntime().addShutdownHook(new Thread(Rinku::shutdown, "Rinku-Shutdown"));
-                    } else if (platform.isMacOS()) {
-                        CefUtil.getCefApp().macOSTerminationRequestRunnable = () -> {
-                            shutdown();
-                            Minecraft.getInstance().stop();
-                        };
-                    }
-
-                    return true;
-                }
-                awaitingInit.forEach(t -> t.onInit(false));
-                awaitingInit.clear();
-                LOGGER.error("Could not initialize Chromium Embedded Framework");
-                shutdownLocked();
-                return false;
-            } catch (RuntimeException | Error failure) {
-                shutdownLocked();
-                throw failure;
-            }
-        }
     }
 
     /**
@@ -173,19 +210,6 @@ public final class Rinku {
     }
 
     /**
-     * Check if Rinku is initialized.
-     * @return true if Rinku is initialized correctly, false if not
-     */
-    public static boolean isInitialized() {
-        return INITIALIZATION_CONTROLLER.isInitialized();
-    }
-
-    /** Returns whether a new CEF initialization attempt may be scheduled. */
-    public static boolean isInitializationAllowed() {
-        return INITIALIZATION_CONTROLLER.canInitialize();
-    }
-
-    /**
      * Permanently shuts down Rinku/CEF for this game process. Calling this method before
      * initialization also seals the lifecycle because CEF cannot safely be restarted later.
      */
@@ -210,14 +234,6 @@ public final class Rinku {
         if (hadInitializedCef) {
             CefUtil.shutdown();
         }
-    }
-
-    /**
-     * Check if Rinku has been initialized, throws a {@link RuntimeException} if not.
-     */
-    public static void assertInitialized() {
-        if (!isInitialized())
-            throw new RuntimeException("Chromium Embedded Framework was never initialized.");
     }
 
     private static RinkuBrowser acquireOrCreateBrowser(String url, boolean transparent) {
@@ -245,7 +261,7 @@ public final class Rinku {
     private static RinkuBrowser createBrowserImmediately(String url, boolean transparent) {
         RinkuClient currentClient = client;
         if (currentClient == null) {
-            throw new IllegalStateException("Chromium Embedded Framework was never initialized.");
+            throw new IllegalStateException("Rinku was never initialized.");
         }
         RinkuBrowser browser = new RinkuBrowser(currentClient, url, transparent);
         browser.setCloseAllowed();
@@ -308,11 +324,7 @@ public final class Rinku {
             Minecraft.getInstance().submit(() -> preloadBrowser(transparent));
         } catch (Throwable throwable) {
             decrementPreloadInFlight(transparent);
-            LOGGER.warn(
-                    "Failed to submit {} browser preload task",
-                    transparent ? "transparent" : "opaque",
-                    throwable
-            );
+            LOGGER.warn("[RINKU] Failed to submit {} browser preload task!", transparent ? "transparent" : "opaque", throwable);
         }
     }
 
@@ -341,14 +353,9 @@ public final class Rinku {
                 }
             }
         } catch (Throwable throwable) {
-            LOGGER.warn(
-                    "Failed to preload {} browser",
-                    transparent ? "transparent" : "opaque",
-                    throwable
-            );
+            LOGGER.warn("[RINKU] Failed to preload {} browser!", transparent ? "transparent" : "opaque", throwable);
         } finally {
             decrementPreloadInFlight(transparent);
-
             if (!pooled && preloadedBrowser != null) {
                 closeBrowserQuietly(preloadedBrowser);
             }
@@ -401,12 +408,11 @@ public final class Rinku {
         }
     }
 
-    private static void closeBrowserQuietly(RinkuBrowser browser) {
+    private static void closeBrowserQuietly(@Nullable RinkuBrowser browser) {
         try {
+            if (browser == null) return;
             browser.close();
-        } catch (Throwable throwable) {
-            LOGGER.warn("Failed to close preloaded browser", throwable);
-        }
+        } catch (Throwable ignored) {} // We close it _quietly_, so throwing errors would be kinda dumb here, wouldn't it?
     }
 
     /**
@@ -435,5 +441,5 @@ public final class Rinku {
         CEF_TO_GLFW_CURSORS.put(cursorType, glfwCursorHandle);
         return glfwCursorHandle;
     }
-    private static final HashMap<CefCursorType, Long> CEF_TO_GLFW_CURSORS = new HashMap<>();
+
 }

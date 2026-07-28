@@ -700,7 +700,7 @@ public class RinkuBrowser extends CefBrowserOsr {
         }
 
         // macOS generally has a slow scroll speed that feels more natural with their magic mice / trackpads
-        if (!RinkuPlatform.getPlatform().isMacOS()) {
+        if (!OSPlatform.getPlatform().isMacOS()) {
             // This removes the feeling of "smooth scroll"
             if (amount < 0) {
                 amount = Math.floor(amount);

@@ -47,7 +47,7 @@ final class RinkuJcefInstallationValidator {
         return normalized;
     }
 
-    static boolean isReusable(Path installation, RinkuPlatform platform, String expectedCommit) {
+    static boolean isReusable(Path installation, OSPlatform platform, String expectedCommit) {
         try {
             validate(installation, platform, expectedCommit, true);
             return true;
@@ -56,15 +56,15 @@ final class RinkuJcefInstallationValidator {
         }
     }
 
-    static void validateExtracted(Path installation, RinkuPlatform platform, String expectedCommit) throws IOException {
+    static void validateExtracted(Path installation, OSPlatform platform, String expectedCommit) throws IOException {
         validate(installation, platform, expectedCommit, false);
     }
 
-    static void validateCompleted(Path installation, RinkuPlatform platform, String expectedCommit) throws IOException {
+    static void validateCompleted(Path installation, OSPlatform platform, String expectedCommit) throws IOException {
         validate(installation, platform, expectedCommit, true);
     }
 
-    static void writeCompleteMarker(Path installation, RinkuPlatform platform, String expectedCommit) throws IOException {
+    static void writeCompleteMarker(Path installation, OSPlatform platform, String expectedCommit) throws IOException {
         String normalizedCommit = normalizeCommit(expectedCommit);
         byte[] marker = markerContents(platform, normalizedCommit).getBytes(StandardCharsets.UTF_8);
         Path markerPath = installation.resolve(COMPLETE_MARKER_FILE);
@@ -77,7 +77,7 @@ final class RinkuJcefInstallationValidator {
         }
     }
 
-    private static void validate(Path installation, RinkuPlatform platform, String expectedCommit, boolean requireComplete) throws IOException {
+    private static void validate(Path installation, OSPlatform platform, String expectedCommit, boolean requireComplete) throws IOException {
         String normalizedCommit = normalizeCommit(expectedCommit);
         requireSafeDirectory(installation, "JCEF installation directory");
         Path marker = installation.resolve(COMPLETE_MARKER_FILE);
@@ -96,7 +96,7 @@ final class RinkuJcefInstallationValidator {
         }
     }
 
-    private static void validateManifestIdentity(Path manifestPath, RinkuPlatform platform, String expectedCommit) throws IOException {
+    private static void validateManifestIdentity(Path manifestPath, OSPlatform platform, String expectedCommit) throws IOException {
         String manifest = readSmallUtf8(manifestPath, MAX_MANIFEST_BYTES, "JCEF distribution manifest");
         String archiveRoot = null;
         String commit = null;
@@ -148,7 +148,7 @@ final class RinkuJcefInstallationValidator {
         return reader.nextString();
     }
 
-    private static List<String> requiredFiles(RinkuPlatform platform) {
+    private static List<String> requiredFiles(OSPlatform platform) {
         List<String> required = new ArrayList<>();
         if (platform.isWindows()) {
             required.addAll(List.of("jcef.dll", "libcef.dll", "jcef_helper.exe", "chrome_elf.dll", "d3dcompiler_47.dll", "libEGL.dll", "libGLESv2.dll", "icudtl.dat", "locales/en-US.pak"));
@@ -245,7 +245,7 @@ final class RinkuJcefInstallationValidator {
         return after.isRegularFile() && before.size() == after.size() && before.lastModifiedTime().equals(after.lastModifiedTime()) && (beforeKey == null || afterKey == null || beforeKey.equals(afterKey));
     }
 
-    private static String markerContents(RinkuPlatform platform, String commit) {
+    private static String markerContents(OSPlatform platform, String commit) {
         return "rinku-jcef-v1\nplatform=" + platform.getNormalizedName() + "\ncommit=" + commit + "\n";
     }
 }

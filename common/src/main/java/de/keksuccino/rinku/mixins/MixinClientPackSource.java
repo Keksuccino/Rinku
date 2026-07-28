@@ -2,7 +2,7 @@ package de.keksuccino.rinku.mixins;
 
 import de.keksuccino.rinku.Rinku;
 import de.keksuccino.rinku.RinkuDownloader;
-import de.keksuccino.rinku.RinkuPlatform;
+import de.keksuccino.rinku.OSPlatform;
 import de.keksuccino.rinku.RinkuSettings;
 import de.keksuccino.rinku.internal.RinkuDownloadListener;
 import de.keksuccino.rinku.util.GameDirectoryUtils;
@@ -67,7 +67,7 @@ public class MixinClientPackSource {
             LOGGER_RINKU.info("java-cef commit: " + javaCefCommit);
 
             RinkuSettings settings = Rinku.getSettings();
-            RinkuPlatform platform = RinkuPlatform.getPlatform();
+            OSPlatform platform = OSPlatform.getPlatform();
             RinkuDownloader downloader = new RinkuDownloader(settings.getDownloadMirror(), platform, settings.createDownloadPolicy());
             RinkuDownloader.InstallationResult installation = downloader.installOrUpdate(settings.isSkipDownload());
             System.setProperty("jcef.path", installation.installationDirectory().toRealPath().toString());

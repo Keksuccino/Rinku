@@ -1,7 +1,7 @@
 package de.keksuccino.rinku.mixins;
 
 import de.keksuccino.rinku.Rinku;
-import de.keksuccino.rinku.RinkuPlatform;
+import de.keksuccino.rinku.OSPlatform;
 import de.keksuccino.rinku.RinkuRenderCoordinator;
 import net.minecraft.client.Minecraft;
 import org.jetbrains.annotations.Nullable;
@@ -48,7 +48,7 @@ public abstract class MixinMinecraft {
     @Inject(method = "close", at = @At("TAIL"))
     public void after_close_RINKU(CallbackInfo info) {
 
-        if (!RinkuPlatform.getPlatform().isWindows()) {
+        if (!OSPlatform.getPlatform().isWindows()) {
             return;
         }
 

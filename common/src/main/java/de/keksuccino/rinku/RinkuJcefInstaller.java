@@ -34,7 +34,7 @@ final class RinkuJcefInstaller implements AutoCloseable {
     private static final Object JVM_LOCK_REGISTRY_MONITOR = new Object();
     private static final Map<Path, JvmLockEntry> JVM_LOCKS = new HashMap<>();
 
-    private final RinkuPlatform platform;
+    private final OSPlatform platform;
     private final String javaCefCommit;
     private final Path platformDirectory;
     private final Path stagingRootDirectory;
@@ -52,7 +52,7 @@ final class RinkuJcefInstaller implements AutoCloseable {
     private Path extractionDirectory;
     private boolean closed;
 
-    RinkuJcefInstaller(Path librariesDirectory, RinkuPlatform platform, String javaCefCommit, Consumer<IOException> cleanupWarning) throws IOException {
+    RinkuJcefInstaller(Path librariesDirectory, OSPlatform platform, String javaCefCommit, Consumer<IOException> cleanupWarning) throws IOException {
         this.platform = Objects.requireNonNull(platform, "Rinku platform must not be null");
         this.javaCefCommit = RinkuJcefInstallationValidator.normalizeCommit(javaCefCommit);
         this.cleanupWarning = Objects.requireNonNull(cleanupWarning, "JCEF cleanup warning handler must not be null");

@@ -2,7 +2,8 @@ package de.keksuccino.rinku;
 
 import java.util.Locale;
 
-public enum RinkuPlatform {
+public enum OSPlatform {
+
     LINUX_AMD64,
     LINUX_ARM64,
     WINDOWS_AMD64,
@@ -26,7 +27,8 @@ public enum RinkuPlatform {
         return (this == MACOS_AMD64 || this == MACOS_ARM64);
     }
 
-    public static RinkuPlatform getPlatform() {
+    public static OSPlatform getPlatform() {
+
         String os = System.getProperty("os.name").toLowerCase(Locale.US);
         String arch = System.getProperty("os.arch").toLowerCase(Locale.US);
         boolean amd64 = arch.equals("amd64") || arch.equals("x86_64");
@@ -53,5 +55,7 @@ public enum RinkuPlatform {
         }
 
         throw new RuntimeException("Unsupported platform: " + os + " " + arch);
+
     }
+
 }

@@ -46,14 +46,14 @@ final class RinkuSecureArchiveExtractor {
     private RinkuSecureArchiveExtractor() {
     }
 
-    static void extract(File tarGzFile, File outputDirectory, RinkuPlatform platform, RinkuDownloader.DownloadPolicy policy, Consumer<Float> progress) throws IOException {
+    static void extract(File tarGzFile, File outputDirectory, OSPlatform platform, RinkuDownloader.DownloadPolicy policy, Consumer<Float> progress) throws IOException {
         try (RinkuVerifiedArchiveSource archive = RinkuVerifiedArchiveSource.open(tarGzFile.toPath(), policy.maxArchiveBytes())) {
             String archiveDigest = archive.calculateDigest();
             extract(archive, archiveDigest, outputDirectory, platform, policy, progress);
         }
     }
 
-    static void extract(RinkuVerifiedArchiveSource archive, String expectedDigest, File outputDirectory, RinkuPlatform platform, RinkuDownloader.DownloadPolicy policy, Consumer<Float> progress) throws IOException {
+    static void extract(RinkuVerifiedArchiveSource archive, String expectedDigest, File outputDirectory, OSPlatform platform, RinkuDownloader.DownloadPolicy policy, Consumer<Float> progress) throws IOException {
         Path outputRoot = outputDirectory.toPath().toAbsolutePath().normalize();
         if (!Files.isDirectory(outputRoot, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("Unsafe JCEF extraction directory " + outputRoot);
@@ -79,7 +79,7 @@ final class RinkuSecureArchiveExtractor {
         progress.accept(1.0f);
     }
 
-    private static ArchiveScan extractArchive(InputStream archiveInput, Path realOutputRoot, RinkuPlatform platform, RinkuDownloader.DownloadPolicy policy, Consumer<Float> progress, boolean normalizePosixModes, long expectedExtractedSize) throws IOException {
+    private static ArchiveScan extractArchive(InputStream archiveInput, Path realOutputRoot, OSPlatform platform, RinkuDownloader.DownloadPolicy policy, Consumer<Float> progress, boolean normalizePosixModes, long expectedExtractedSize) throws IOException {
         long totalBytesRead = 0L;
         int entryCount = 0;
         byte[] buffer = new byte[BUFFER_SIZE_BYTES];
@@ -130,7 +130,7 @@ final class RinkuSecureArchiveExtractor {
         return new ArchiveScan(totalBytesRead, entryCount);
     }
 
-    private static ArchiveScan scanArchive(InputStream archiveInput, RinkuPlatform platform, RinkuDownloader.DownloadPolicy policy) throws IOException {
+    private static ArchiveScan scanArchive(InputStream archiveInput, OSPlatform platform, RinkuDownloader.DownloadPolicy policy) throws IOException {
         long totalSize = 0L;
         int entryCount = 0;
         byte[] buffer = new byte[BUFFER_SIZE_BYTES];
