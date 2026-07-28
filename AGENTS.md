@@ -24,12 +24,12 @@
 ## Mixin Structurization
 - Place shared Mixins under `common/src/main/java/de/keksuccino/rinku/mixin/mixins/common/<side>` and mirror the existing folder depth when adding new targets.
 - Declare `@Mixin` classes (and accessor interfaces) with imports grouped at the top, list `@Unique` members before any `@Shadow` declarations, and extend or implement the vanilla type when necessary; supply a suppressed dummy constructor when subclasses require it.
-- Suffix every unique field or helper with `_RINKU`. Static finals use all caps with `_RINKU`, and injected method names follow the `before/after/on/wrap/cancel_<VanillaMethod>_RINKU` pattern. Accessor/invoker methods also end in `_RINKU`.
+- Suffix every unique field or helper with `_Rinku`. Static finals use all caps with `_RINKU`, and injected method names follow the `before/after/on/wrap/cancel_<VanillaMethod>_Rinku` pattern. Accessor/invoker methods also end in `_Rinku`.
 - Cluster related injections together (for example, all `setScreen` hooks in `MixinGui`) and keep helper wrappers private unless a wider contract is required.
 - Use short `//` comments for quick reminders and `/** @reason ... */` blocks ahead of injections that change vanilla behavior, matching the authoring tone in existing files.
 - Rinku has access to Mixin Extras.
 - Prefer using features from Mixin Extras instead of using normal Mixin redirects or overrides.
-- When leveraging Mixin Extras (`WrapOperation`, `WrapWithCondition`, etc.), name helpers after the intent (`wrap_..._RINKU`, `cancel_..._RINKU`) and call the provided `Operation` when returning to vanilla flow.
+- When leveraging Mixin Extras (`WrapOperation`, `WrapWithCondition`, etc.), name helpers after the intent (`wrap_..._Rinku`, `cancel_..._Rinku`) and call the provided `Operation` when returning to vanilla flow.
 - When creating normal Mixin classes, call them `Mixin<OriginalClassName>`, so for the `Minecraft` class that would be `MixinMinecraft`.
 - When creating Mixin accessor interfaces, name them `AccessorMixin<OriginalClassName>`, so for the `Minecraft` class that would be `AccessorMixinMinecraft`.
 - Keep Mixin classes lightweight.
