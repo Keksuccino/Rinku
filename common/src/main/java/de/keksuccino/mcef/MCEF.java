@@ -410,12 +410,11 @@ public final class MCEF {
     }
 
     /**
-     * Get the git commit hash of the java-cef code (either from MANIFEST.MF or from the git repo on-disk if in a
-     * development environment). Used for downloading the java-cef release.
+     * Get the build-pinned git commit hash of the JCEF Java API and native runtime release.
      * @return The git commit hash of java-cef
      */
     public static String getJavaCefCommit() throws IOException {
-        return JavaCefCommitResolver.resolve(MCEF.class, System.getProperty("mcef.java.cef.commit"));
+        return JcefRuntimeIdentity.JAVA_CEF_COMMIT;
     }
 
     /**

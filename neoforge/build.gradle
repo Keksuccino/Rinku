@@ -10,11 +10,6 @@ base {
     archivesName = "${mod_id}"
 }
 
-def commonJcefCompileDependencies = configurations.dependencyScope("commonJcefCompileDependencies")
-def commonJcefCompileClasspath = configurations.resolvable("commonJcefCompileClasspath") {
-    extendsFrom(commonJcefCompileDependencies.get())
-}
-
 runs {
     configureEach {
         modSource project.sourceSets.main
@@ -49,6 +44,12 @@ sourceSets.main.resources { srcDir 'src/generated/resources' }
 
 jarJar.enable()
 
+def finalJarJar = tasks.named("jarJar", Jar)
+jcefPackagedBinaryArchives.from(finalJarJar.flatMap { it.archiveFile })
+tasks.named("verifyJcefPackaging").configure {
+    dependsOn(finalJarJar)
+}
+
 subsystems {
     parchment {
         minecraftVersion = "${parchment_mc_version}"
@@ -65,7 +66,6 @@ dependencies {
 //        jarJar.ranged(it, "[317b2cb6e5,)")
 //    }
     compileOnly project(":common")
-    add("commonJcefCompileDependencies", project(path: ":common", configuration: "jcefCompileClasspathElements"))
 }
 
 // Exclude Fabric Loader from NeoForge
@@ -91,8 +91,7 @@ Spec<Task> notNeoTask = { Task it -> !it.name.startsWith("neo") } as Spec<Task>
 
 tasks.named("compileJava", JavaCompile).configure {
     source(project(":common").sourceSets.main.allSource)
-    source(project(":common").sourceSets.jcef.allSource)
-    classpath += commonJcefCompileClasspath.get()
+    dependsOn(project(":common").tasks.named("generateJcefRuntimeIdentity"))
 }
 
 tasks.withType(JavaCompile).matching(notNeoTask).configureEach {
@@ -104,8 +103,8 @@ tasks.withType(Javadoc).matching(notNeoTask).configureEach {
 }
 
 tasks.named("sourcesJar", Jar) {
+    dependsOn(project(":common").tasks.named("generateJcefRuntimeIdentity"))
     from(project(":common").sourceSets.main.allSource)
-    from(project(":common").sourceSets.jcef.allSource)
 }
 
 tasks.withType(ProcessResources).matching(notNeoTask).configureEach {

@@ -10,12 +10,6 @@ base {
     archivesName = "${mod_id}"
 }
 
-def commonJcefSourceSet = project(":common").sourceSets.jcef
-def commonJcefCompileDependencies = configurations.dependencyScope("commonJcefCompileDependencies")
-def commonJcefCompileClasspath = configurations.resolvable("commonJcefCompileClasspath") {
-    extendsFrom(commonJcefCompileDependencies.get())
-}
-
 dependencies {
 
     minecraft "com.mojang:minecraft:${minecraft_version}"
@@ -23,7 +17,6 @@ dependencies {
     implementation "net.fabricmc.fabric-api:fabric-api:${fabric_version}"
     implementation group: 'com.google.code.findbugs', name: 'jsr305', version: '3.0.1'
     implementation project(":common")
-    add("commonJcefCompileDependencies", project(path: ":common", configuration: "jcefCompileClasspathElements"))
     include(implementation(annotationProcessor("io.github.llamalad7:mixinextras-fabric:${mixin_extras_version}")))
     implementation "maven.modrinth:modmenu:20.0.0-beta.4"
     testImplementation "org.junit.jupiter:junit-jupiter-api:5.10.2"
@@ -37,7 +30,6 @@ loom {
         "${mod_id}" {
             sourceSet sourceSets.main
             sourceSet project(":common").sourceSets.main
-            sourceSet commonJcefSourceSet
         }
     }
     runs {
@@ -58,8 +50,7 @@ loom {
 
 tasks.named("compileJava", JavaCompile).configure {
     source(project(":common").sourceSets.main.allSource)
-    source(commonJcefSourceSet.allSource)
-    classpath += commonJcefCompileClasspath.get()
+    dependsOn(project(":common").tasks.named("generateJcefRuntimeIdentity"))
 }
 tasks.withType(Javadoc).configureEach {
     source(project(":common").sourceSets.main.allJava)
@@ -70,8 +61,8 @@ tasks.withType(Test).configureEach {
     failOnNoDiscoveredTests = false
 }
 tasks.named("sourcesJar", Jar) {
+    dependsOn(project(":common").tasks.named("generateJcefRuntimeIdentity"))
     from(project(":common").sourceSets.main.allSource)
-    from(commonJcefSourceSet.allSource)
 }
 
 processResources {

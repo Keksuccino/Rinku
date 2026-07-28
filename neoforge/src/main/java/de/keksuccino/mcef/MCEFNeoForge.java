@@ -26,11 +26,13 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.fml.event.lifecycle.FMLDedicatedServerSetupEvent;
 import net.neoforged.fml.loading.FMLEnvironment;
+import net.neoforged.fml.loading.FMLPaths;
 
 @Mod(MCEF.MOD_ID)
 public class MCEFNeoForge {
 
     public MCEFNeoForge(IEventBus modEventBus) {
+        MCEFInstallationPaths.registerGameInstanceDirectory(FMLPaths.GAMEDIR.get());
         if (!FMLEnvironment.isProduction()) {
             new MCEFExampleMod(modEventBus);
         }

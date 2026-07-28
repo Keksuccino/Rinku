@@ -12,10 +12,6 @@ package de.keksuccino.mcef;
 
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.regex.Pattern;
@@ -24,11 +20,9 @@ import java.util.regex.Pattern;
 final class MCEFDownloadMirror {
     private static final Pattern SAFE_PATH_SEGMENT = Pattern.compile("[A-Za-z0-9._+-]+");
     private final URI baseUri;
-    private final String checksumSourceId;
 
     private MCEFDownloadMirror(URI baseUri) {
         this.baseUri = baseUri;
-        checksumSourceId = createChecksumSourceId(baseUri.toASCIIString());
     }
 
     static MCEFDownloadMirror parse(String value) {
@@ -88,20 +82,6 @@ final class MCEFDownloadMirror {
 
     String safeLogIdentity() {
         return baseUri.getScheme() + "://" + baseUri.getRawAuthority();
-    }
-
-    /** Returns a stable identifier without persisting the configured mirror URI. */
-    String checksumSourceId() {
-        return checksumSourceId;
-    }
-
-    private static String createChecksumSourceId(String canonicalMirrorUri) {
-        try {
-            byte[] digest = MessageDigest.getInstance("SHA-256").digest(canonicalMirrorUri.getBytes(StandardCharsets.UTF_8));
-            return MCEFInstallationState.configuredChecksumSource(HexFormat.of().formatHex(digest));
-        } catch (NoSuchAlgorithmException impossible) {
-            throw new IllegalStateException("SHA-256 is not available", impossible);
-        }
     }
 
     private static boolean hasMalformedPort(URI uri) {

@@ -14,6 +14,9 @@
   "license": "${mod_license}",
   "icon": "${mod_id}_logo_128x128.png",
   "entrypoints": {
+    "preLaunch": [
+      "de.keksuccino.mcef.MCEFFabricBootstrap"
+    ],
     "main": [
       "de.keksuccino.mcef.MCEFFabric"
     ],

@@ -39,7 +39,7 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.function.Consumer;
 
-/** Extracts a JCEF tarball into a new transaction tree without following or replacing paths. */
+/** Extracts a JCEF tarball into a new staging tree without following or replacing paths. */
 final class MCEFSecureArchiveExtractor {
     private static final int BUFFER_SIZE_BYTES = 16 * 1024;
     private static final int MAX_ARCHIVE_ENTRIES = 200_000;

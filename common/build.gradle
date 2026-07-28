@@ -23,41 +23,38 @@ dependencies {
     testRuntimeOnly "org.junit.platform:junit-platform-launcher:1.10.2"
 }
 
-sourceSets {
-    jcef {
-        java {
-            srcDir "java-cef/java"
-            exclude "**/tests/**"
-        }
-    }
+def generatedJcefIdentityDirectory = layout.buildDirectory.dir("generated/sources/jcefIdentity/java/main")
+def generateJcefRuntimeIdentity = tasks.register("generateJcefRuntimeIdentity") {
+    inputs.property("jcefCommit", rootProject.jcefCommit)
+    outputs.dir(generatedJcefIdentityDirectory)
+    doLast {
+        def sourceFile = generatedJcefIdentityDirectory.get().file("de/keksuccino/mcef/JcefRuntimeIdentity.java").asFile
+        sourceFile.parentFile.mkdirs()
+        sourceFile.setText("""package de.keksuccino.mcef;
 
-    main {
-        compileClasspath += jcef.output
-        runtimeClasspath += jcef.output
+/** Build-generated identity binding the Java API and downloaded native runtime to one JCEF release. */
+final class JcefRuntimeIdentity {
+    static final String JAVA_CEF_COMMIT = \"${rootProject.jcefCommit}\";
+
+    private JcefRuntimeIdentity() {
+    }
+}
+""", "UTF-8")
     }
 }
 
-dependencies {
-    jcefCompileOnly files("java-cef/third_party/jogamp/jar/gluegen-rt.jar", "java-cef/third_party/jogamp/jar/jogl-all.jar")
+sourceSets.main.java.srcDir(generatedJcefIdentityDirectory)
+
+tasks.named("compileJava", JavaCompile).configure {
+    dependsOn(generateJcefRuntimeIdentity)
 }
 
-configurations.consumable("jcefCompileClasspathElements") {
-    extendsFrom(configurations.getByName(sourceSets.jcef.compileClasspathConfigurationName))
+tasks.named("sourcesJar", Jar).configure {
+    dependsOn(generateJcefRuntimeIdentity)
 }
 
 tasks.named("test", Test).configure {
     useJUnitPlatform()
-}
-
-processResources.dependsOn(processJcefResources)
-
-tasks.named("jar", Jar).configure {
-    from sourceSets.jcef.output.classesDirs
-    from sourceSets.jcef.output.resourcesDir
-}
-
-tasks.named("sourcesJar", Jar).configure {
-    from(sourceSets.jcef.allSource)
 }
 
 publishing {

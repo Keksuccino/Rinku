@@ -30,11 +30,12 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.regex.Pattern;
 
 /**
- * Keeps one no-follow archive identity open across checksum validation, parsing, extraction, and
- * optional retention. Every consumer pass hashes all raw archive bytes, including unread parser
- * trailers, so path replacement and same-inode mutation cannot pass with a restored pathname.
+ * Keeps one no-follow archive handle open across checksum validation and extraction. Every consumer
+ * pass hashes all raw archive bytes, including unread parser trailers, so path replacement and
+ * same-inode mutation cannot pass with a restored pathname.
  */
 final class MCEFVerifiedArchiveSource implements AutoCloseable {
     @FunctionalInterface
@@ -43,6 +44,7 @@ final class MCEFVerifiedArchiveSource implements AutoCloseable {
     }
 
     private static final int DRAIN_BUFFER_SIZE_BYTES = 16 * 1024;
+    private static final Pattern SHA256_PATTERN = Pattern.compile("[0-9a-f]{64}");
 
     private final Path path;
     private final FileChannel channel;
@@ -91,7 +93,7 @@ final class MCEFVerifiedArchiveSource implements AutoCloseable {
     }
 
     void verifiedPass(String expectedDigest, InputConsumer consumer) throws IOException {
-        completePass(MCEFInstallationState.normalizeDigest(expectedDigest), consumer);
+        completePass(normalizeDigest(expectedDigest), consumer);
     }
 
     private synchronized String completePass(String expectedDigest, InputConsumer consumer) throws IOException {
@@ -114,7 +116,7 @@ final class MCEFVerifiedArchiveSource implements AutoCloseable {
                 @Override
                 public void close() {
                     // Parsers must be free to close their stream without closing the identity-stable
-                    // channel needed by the following verification or retained-copy pass.
+                    // channel needed by the following verification or extraction pass.
                 }
 
                 @Override
@@ -155,6 +157,17 @@ final class MCEFVerifiedArchiveSource implements AutoCloseable {
         } catch (NoSuchAlgorithmException unavailable) {
             throw new IOException("SHA-256 is unavailable", unavailable);
         }
+    }
+
+    private static String normalizeDigest(String digest) {
+        if (digest == null) {
+            throw new IllegalArgumentException("JCEF archive digest is missing");
+        }
+        String normalized = digest.toLowerCase(Locale.ROOT);
+        if (!SHA256_PATTERN.matcher(normalized).matches()) {
+            throw new IllegalArgumentException("Invalid JCEF archive digest");
+        }
+        return normalized;
     }
 
     private static void drain(InputStream input) throws IOException {

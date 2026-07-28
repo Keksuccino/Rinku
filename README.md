@@ -52,27 +52,27 @@ NeoForge ships deobfuscated jars by default, so the dependency can be declared w
 
 ## Building & Modifying MCEF
 
-After cloning this repo, you will need to clone the java-cef git submodule. There is a gradle task for this: `./gradlew cloneJcef`.
+The build resolves the JCEF Java binary and source JARs from the `Keksuccino/jcef-mcef` GitHub release selected by `jcef_commit` in `gradle.properties`; no submodule checkout is required. When updating JCEF, select a lowercase 40-character commit that has a matching `java-cef-<commit>` release containing both `jcef-mcef.jar` and `jcef-mcef-sources.jar`. The same compiled identity selects the matching native runtime release. JCEF classes are flat-merged into MCEF binaries and the upstream source classifier is flat-merged into every MCEF sources JAR, so published metadata needs no transitive JCEF dependency and consumers still receive JCEF sources.
 
 To run the Fabric client: `./gradlew fabricClient`
 To run the NeoForge client: `./gradlew neoforgeClient`
 
 In-game, there is a demo browser if you press F12 after you're loaded into a world (the demo browser only exists when you're running from a development environment).
 
-### JCEF mirror and checksum trust
+### JCEF runtime cache and checksum trust
 
-MCEF binds every checksum-verified immutable JCEF generation to the endpoint that supplied its checksum. The official endpoint is recorded as `official`; configured endpoints are recorded only as a SHA-256 identifier derived from their canonical URI, so private mirror paths are not persisted in generation metadata. A cached generation is reused only while its recorded source remains allowed by the active mirror policy. When a policy or source change excludes that recorded source—for example, moving a configured-source generation to `OFFICIAL_ONLY` or changing a `CONFIGURED_ONLY` mirror—MCEF requires a checksum fetch from an allowed endpoint before the same runtime can be reused. An official fallback generation created under `PREFER_CONFIGURED` remains eligible under `OFFICIAL_ONLY`.
+MCEF validates each downloaded runtime archive against the `.sha256` file supplied by the selected endpoint before extraction. This establishes consistency with that endpoint; it is not an independent publisher signature. Mirror policy affects where a missing runtime is downloaded from, while completed cache entries are source-agnostic.
 
-The `.sha256` file establishes that an archive matches the digest supplied by the selected endpoint. It is an integrity check, not an independent publisher signature or authentication mechanism. Legacy generation metadata that predates source binding is re-verified online before reuse; `skip-download=true` requires an existing checksum-verified generation from a source allowed by the current policy.
+Each complete installation is published atomically under `<game instance>/mcef-libraries/jcef-v1/<platform>/<java-cef commit>`. MCEF reuses only the structurally valid entry for the exact commit compiled into the mod. `skip-download=true` therefore requires that exact completed entry to exist already.
 
 ## Clearing MCEF Cache
 
-MCEF skips the downloader screen once it detects that all required files are present. Remove the following paths to force a fresh download and clean browser data:
+MCEF skips the downloader screen once it detects that the exact compiled JCEF runtime is complete. Remove the following paths when needed:
 
-- **Binary bundle (production builds):** `<game directory>/mods/mcef-libraries`
-- **Binary bundle (development runs):** `<repo>/fabric/build/mcef-libraries` for Fabric or `<repo>/build/mcef-libraries` for NeoForge
-- **Immutable JCEF generations:** hidden `.<platform>.mcef-generations` and `.<platform>.mcef-current.properties` paths inside the relevant `mcef-libraries` folder. Removing the complete `mcef-libraries` folder clears generations, transaction recovery metadata, retained archives, and compatibility checksums together.
-- **JCEF profile/cache:** `<game directory>/mods/mcef-cache`
-- **Config overrides:** `<game directory>/config/mcef/mcef.properties` (delete or edit this file if it sets `skip-download=true`)
+- **JCEF runtime installations:** `<game instance>/mcef-libraries`. Development game instances are `<repo>/fabric/run_client` for Fabric and `<repo>/run_client` for NeoForge with the supplied run configurations.
+- **Config overrides:** `<game instance>/config/mcef/mcef.properties` (delete or edit this file if it sets `skip-download=true`).
+- **Persistent browser data:** `%LOCALAPPDATA%\MCEF\cef-cache` on Windows, `~/Library/Application Support/MCEF/cef-cache` on macOS, or `${XDG_DATA_HOME:-~/.local/share}/mcef/cef-cache` on Linux.
+
+Stop every Minecraft instance using a cache before removing it. MCEF intentionally never auto-deletes completed directories for older commits; delete the selected completed commit directory, or the whole `mcef-libraries` tree, manually only while those instances are stopped.
 
 After clearing these locations, restart the game and the Download screen will reappear to fetch a fresh Chromium bundle.

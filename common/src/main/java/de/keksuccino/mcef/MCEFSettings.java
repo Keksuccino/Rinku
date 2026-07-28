@@ -20,7 +20,6 @@
 
 package de.keksuccino.mcef;
 
-import net.minecraft.client.Minecraft;
 import org.cef.CefSettings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,7 +28,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
@@ -37,11 +35,6 @@ import java.util.concurrent.CompletableFuture;
 public class MCEFSettings {
     private static final Logger LOGGER = LoggerFactory.getLogger("MCEF");
 
-    private static final Path PATH = Minecraft.getInstance().gameDirectory
-            .toPath()
-            .resolve("config")
-            .resolve("mcef")
-            .resolve("mcef.properties");
     private static final String DEFAULT_DOWNLOAD_MIRROR = MCEFDownloader.OFFICIAL_MIRROR;
     private static final MCEFDownloader.MirrorPolicy DEFAULT_DOWNLOAD_MIRROR_POLICY = MCEFDownloader.MirrorPolicy.OFFICIAL_ONLY;
     private static final boolean DEFAULT_ENFORCE_DOWNLOAD_CHECKSUMS = true;
@@ -306,7 +299,7 @@ public class MCEFSettings {
     }
 
     public void save() throws IOException {
-        File file = PATH.toFile();
+        File file = MCEFInstallationPaths.settingsFile().toFile();
 
         file.getParentFile().mkdirs();
 
@@ -340,7 +333,7 @@ public class MCEFSettings {
     }
 
     public void load() throws IOException {
-        File file = PATH.toFile();
+        File file = MCEFInstallationPaths.settingsFile().toFile();
 
         if (!file.exists()) {
             save();

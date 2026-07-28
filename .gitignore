@@ -2,8 +2,6 @@
 /.gradle/
 /.idea/
 /build/
-/buildSrc/.gradle/
-/buildSrc/build/
 /run_client/
 /run_server/
 /common/.gradle/
@@ -11,6 +9,7 @@
 /common/logs/
 /fabric/.gradle/
 /fabric/build/
+/fabric/logs/
 /fabric/run_client/
 /fabric/run_server/
 /neoforge/.gradle/
@@ -25,4 +24,3 @@
 /library_cached_sources/
 /minecraft_cached_sources/
 /bug_and_performance_qa.md
-/common/java-cef/
