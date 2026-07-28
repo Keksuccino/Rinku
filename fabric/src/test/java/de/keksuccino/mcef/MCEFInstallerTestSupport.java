@@ -66,6 +66,10 @@ final class MCEFInstallerTestSupport {
         return (archive, outputDirectory) -> writeRuntimeInstallation(outputDirectory.toPath().resolve(PLATFORM.getNormalizedName()), PLATFORM, version, commit);
     }
 
+    static Path installationDirectory(Path librariesDirectory, MCEFPlatform platform, String commit) {
+        return librariesDirectory.toAbsolutePath().normalize().resolve("jcef-v1").resolve(platform.getNormalizedName()).resolve(MCEFJcefInstallationValidator.normalizeCommit(commit));
+    }
+
     static void writeRuntimeInstallation(Path installation, MCEFPlatform platform, String version, String commit) throws IOException {
         Map<String, byte[]> runtimeFiles = runtimeFiles(platform, version);
         Map<String, byte[]> distributionFiles = distributionFiles(platform, runtimeFiles, version);

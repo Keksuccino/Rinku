@@ -48,7 +48,7 @@ class MCEFJcefInstallerTest {
 
         MCEFDownloader.InstallationResult installed = first.installOrUpdate(false);
 
-        Path expected = MCEFInstallationPaths.installationDirectory(temporaryDirectory.toRealPath(), PLATFORM, COMMIT_A);
+        Path expected = MCEFInstallerTestSupport.installationDirectory(temporaryDirectory.toRealPath(), PLATFORM, COMMIT_A);
         assertEquals(expected, installed.installationDirectory());
         assertTrue(installed.downloaded());
         assertTrue(Files.isRegularFile(expected.resolve(MCEFJcefInstallationValidator.COMPLETE_MARKER_FILE)));
@@ -64,7 +64,7 @@ class MCEFJcefInstallerTest {
 
     @Test
     void incompleteExactCommitAndAbandonedStagingAreReplacedSafely() throws Exception {
-        Path incomplete = MCEFInstallationPaths.installationDirectory(temporaryDirectory, PLATFORM, COMMIT_A);
+        Path incomplete = MCEFInstallerTestSupport.installationDirectory(temporaryDirectory, PLATFORM, COMMIT_A);
         MCEFInstallerTestSupport.writeRuntimeInstallation(incomplete, PLATFORM, "incomplete", COMMIT_A);
         Path stagingRoot = incomplete.getParent().resolve(".staging");
         Path abandoned = stagingRoot.resolve(COMMIT_A + "-00000000-0000-4000-8000-000000000000");
@@ -106,7 +106,7 @@ class MCEFJcefInstallerTest {
 
     @Test
     void symbolicLinkCannotSubstituteForThePlatformStagingContainer() throws Exception {
-        Path installation = MCEFInstallationPaths.installationDirectory(temporaryDirectory, PLATFORM, COMMIT_A);
+        Path installation = MCEFInstallerTestSupport.installationDirectory(temporaryDirectory, PLATFORM, COMMIT_A);
         Path platformDirectory = installation.getParent();
         Path outside = temporaryDirectory.resolve("outside-staging");
         Files.createDirectories(platformDirectory);
@@ -172,7 +172,7 @@ class MCEFJcefInstallerTest {
 
         assertThrows(IOException.class, () -> broken.installOrUpdate(false));
 
-        Path installation = MCEFInstallationPaths.installationDirectory(temporaryDirectory, PLATFORM, COMMIT_A);
+        Path installation = MCEFInstallerTestSupport.installationDirectory(temporaryDirectory, PLATFORM, COMMIT_A);
         assertFalse(Files.exists(installation));
         assertFalse(hasStagingDirectories(installation.getParent()));
 
@@ -189,7 +189,7 @@ class MCEFJcefInstallerTest {
 
         assertThrows(IOException.class, () -> downloader.installOrUpdate(false));
 
-        Path installation = MCEFInstallationPaths.installationDirectory(temporaryDirectory, PLATFORM, COMMIT_A);
+        Path installation = MCEFInstallerTestSupport.installationDirectory(temporaryDirectory, PLATFORM, COMMIT_A);
         assertEquals(0, extractions.get());
         assertFalse(Files.exists(installation));
         assertFalse(hasStagingDirectories(installation.getParent()));
@@ -207,7 +207,7 @@ class MCEFJcefInstallerTest {
 
         assertThrows(IOException.class, () -> downloader.installOrUpdate(false));
 
-        Path installation = MCEFInstallationPaths.installationDirectory(temporaryDirectory, PLATFORM, COMMIT_A);
+        Path installation = MCEFInstallerTestSupport.installationDirectory(temporaryDirectory, PLATFORM, COMMIT_A);
         assertFalse(Files.exists(installation));
         assertFalse(hasStagingDirectories(installation.getParent()));
     }
@@ -268,29 +268,6 @@ class MCEFJcefInstallerTest {
             assertEquals("LOCKED", probeLock(lockFile));
         }
         assertEquals("UNLOCKED", probeLock(lockFile));
-    }
-
-    @Test
-    void libraryPathIsDerivedDirectlyFromTheLoaderProvidedInstanceRoot() {
-        Path gameRoot = temporaryDirectory.resolve("instance/../instance");
-
-        Path libraries = MCEFInstallationPaths.librariesDirectory(gameRoot);
-
-        assertEquals(temporaryDirectory.resolve("instance/mcef-libraries").toAbsolutePath().normalize(), libraries);
-    }
-
-    @Test
-    void loaderProvidedInstanceRootIsRegisteredOnceAndControlsTheCompatibilityProperty() {
-        Path gameRoot = temporaryDirectory.resolve("registered-instance");
-        Path normalizedRoot = gameRoot.toAbsolutePath().normalize();
-
-        MCEFInstallationPaths.registerGameInstanceDirectory(gameRoot);
-        MCEFInstallationPaths.registerGameInstanceDirectory(normalizedRoot);
-
-        assertEquals(normalizedRoot, MCEFInstallationPaths.gameInstanceDirectory());
-        assertEquals(normalizedRoot.resolve("mcef-libraries"), MCEFInstallationPaths.librariesDirectory());
-        assertEquals(normalizedRoot.resolve("mcef-libraries").toString(), System.getProperty("mcef.libraries.path"));
-        assertThrows(IllegalStateException.class, () -> MCEFInstallationPaths.registerGameInstanceDirectory(temporaryDirectory.resolve("different-instance")));
     }
 
     private static boolean hasStagingDirectories(Path platformDirectory) throws IOException {

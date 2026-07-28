@@ -20,6 +20,7 @@
 
 package de.keksuccino.mcef;
 
+import de.keksuccino.mcef.util.GameDirectoryUtils;
 import org.cef.CefSettings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -299,7 +300,7 @@ public class MCEFSettings {
     }
 
     public void save() throws IOException {
-        File file = MCEFInstallationPaths.settingsFile().toFile();
+        File file = getSettingsFile();
 
         file.getParentFile().mkdirs();
 
@@ -333,7 +334,7 @@ public class MCEFSettings {
     }
 
     public void load() throws IOException {
-        File file = MCEFInstallationPaths.settingsFile().toFile();
+        File file = getSettingsFile();
 
         if (!file.exists()) {
             save();
@@ -511,6 +512,10 @@ public class MCEFSettings {
             return null;
         }
         return trimmed;
+    }
+
+    private static File getSettingsFile() {
+        return GameDirectoryUtils.getGameDirectory().toPath().resolve("config").resolve("mcef").resolve("mcef.properties").toFile();
     }
 
 }

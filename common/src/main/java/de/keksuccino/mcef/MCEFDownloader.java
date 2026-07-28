@@ -16,6 +16,7 @@
 package de.keksuccino.mcef;
 
 import de.keksuccino.mcef.internal.MCEFDownloadListener;
+import de.keksuccino.mcef.util.GameDirectoryUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -247,8 +248,8 @@ public class MCEFDownloader {
         return new MCEFJcefInstaller(getLibrariesDirectory(), platform, javaCefCommitHash, failure -> LOGGER.warn("Could not completely clean JCEF installer staging residue; cleanup will retry later.", failure));
     }
 
-    private Path getLibrariesDirectory() throws IOException {
-        return librariesDirectoryOverride == null ? MCEFInstallationPaths.librariesDirectory() : librariesDirectoryOverride;
+    private Path getLibrariesDirectory() {
+        return librariesDirectoryOverride == null ? GameDirectoryUtils.getGameDirectory().toPath().resolve("mcef-libraries") : librariesDirectoryOverride;
     }
 
     private void downloadArtifact(MCEFDownloadMirror mirror, String assetName, File outputFile, long maxBytes) throws IOException {

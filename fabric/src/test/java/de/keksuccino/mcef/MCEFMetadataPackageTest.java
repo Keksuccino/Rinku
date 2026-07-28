@@ -50,6 +50,8 @@ class MCEFMetadataPackageTest {
 
         assertTrue(modMetadata.contains("de.keksuccino.mcef.MCEFFabric"));
         assertTrue(mixinMetadata.contains("\"package\": \"de.keksuccino.mcef.mixins.fabric\""));
+        assertFalse(modMetadata.contains("\"preLaunch\""));
+        assertFalse(modMetadata.contains("MCEFFabricBootstrap"));
         assertFalse(modMetadata.contains("cinemamod"));
         assertFalse(mixinMetadata.contains("cinemamod"));
     }

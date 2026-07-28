@@ -240,7 +240,7 @@ class MCEFArchiveExtractionTest {
         MCEFDownloader downloader = MCEFInstallerTestSupport.downloader(libraries, COMMIT_A, archive, MCEFInstallerTestSupport.sha256(archive), null);
 
         IOException failure = assertThrows(IOException.class, () -> downloader.installOrUpdate(false));
-        assertFalse(Files.exists(MCEFInstallationPaths.installationDirectory(libraries, PLATFORM, COMMIT_A)));
+        assertFalse(Files.exists(MCEFInstallerTestSupport.installationDirectory(libraries, PLATFORM, COMMIT_A)));
         return failure;
     }
 

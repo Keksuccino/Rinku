@@ -34,6 +34,7 @@ import java.util.regex.Pattern;
 
 /** Owns one locked, exact-commit JCEF installation attempt. */
 final class MCEFJcefInstaller implements AutoCloseable {
+    private static final String CACHE_VERSION_DIRECTORY_NAME = "jcef-v1";
     private static final String LOCK_FILE_NAME = ".install.lock";
     private static final String STAGING_DIRECTORY_NAME = ".staging";
     private static final Pattern STAGING_NAME_PATTERN = Pattern.compile("[0-9a-f]{40}-[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}");
@@ -70,7 +71,7 @@ final class MCEFJcefInstaller implements AutoCloseable {
         Files.createDirectories(configuredLibrariesDirectory);
         requireSafeDirectory(configuredLibrariesDirectory, "MCEF libraries directory");
         Path realLibrariesDirectory = configuredLibrariesDirectory.toRealPath();
-        Path cacheDirectory = ensureSafeChildDirectory(realLibrariesDirectory, MCEFInstallationPaths.CACHE_VERSION_DIRECTORY_NAME);
+        Path cacheDirectory = ensureSafeChildDirectory(realLibrariesDirectory, CACHE_VERSION_DIRECTORY_NAME);
         platformDirectory = ensureSafeChildDirectory(cacheDirectory, platform.getNormalizedName());
         stagingRootDirectory = ensureSafeChildDirectory(platformDirectory, STAGING_DIRECTORY_NAME);
         installationDirectory = platformDirectory.resolve(this.javaCefCommit);

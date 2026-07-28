@@ -2,10 +2,10 @@ package de.keksuccino.mcef.mixins;
 
 import de.keksuccino.mcef.MCEF;
 import de.keksuccino.mcef.MCEFDownloader;
-import de.keksuccino.mcef.MCEFInstallationPaths;
 import de.keksuccino.mcef.MCEFPlatform;
 import de.keksuccino.mcef.MCEFSettings;
 import de.keksuccino.mcef.internal.MCEFDownloadListener;
+import de.keksuccino.mcef.util.GameDirectoryUtils;
 import net.minecraft.client.resources.ClientPackSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -55,7 +55,7 @@ public class MixinClientPackSource {
 
     @Unique
     private static void setupLibraryPath_MCEF() throws IOException {
-        Path mcefLibrariesDirectory = MCEFInstallationPaths.librariesDirectory();
+        Path mcefLibrariesDirectory = GameDirectoryUtils.getGameDirectory().toPath().resolve("mcef-libraries");
         Files.createDirectories(mcefLibrariesDirectory);
         System.setProperty("mcef.libraries.path", mcefLibrariesDirectory.toRealPath().toString());
     }
