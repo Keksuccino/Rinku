@@ -1,14 +1,14 @@
 <p align="center">
-<img width="64" alt="mcef_icon" src="https://github.com/user-attachments/assets/c11845ff-b57c-4e15-928f-19055874903c" />
+<img width="100" alt="rinku_icon" src="https://github.com/user-attachments/assets/900ef024-282d-4d88-a5c2-01234c084faa" />
 </p>
 
-# MCEF (Minecraft Chromium Embedded Framework)
+## About
 
-MCEF is a mod and library for adding the Chromium web browser into Minecraft.
+Rinku is a mod and library for adding the Chromium web browser into Minecraft.
 
 **Support & Discussion:** https://discord.gg/rhayah27GC
 
-**Current Chromium version:** `116.0.5845.190`
+**Current Chromium version:** `151.0.7922.34`
 
 ## Supported Platforms
 
@@ -18,7 +18,7 @@ MCEF is a mod and library for adding the Chromium web browser into Minecraft.
 
 **This mod will not work on Android.**
 
-## Using MCEF in Your Projects
+## Using Rinku in Your Projects
 
 Snapshots and releases are mirrored on a static Maven repository hosted at `https://keksuccino.github.io/maven/`. Add the repository to your build script, then depend on the loader-specific artifact you need. Artifacts follow the pattern `de.keksuccino:<mod_id>-<loader>:<mod_version>-<minecraft_version>`.
 
@@ -30,11 +30,11 @@ repositories {
 }
 
 dependencies {
-    modImplementation "de.keksuccino:mcef-fabric:<mcef_version>-<mc_version>"
+    modImplementation "de.keksuccino:rinku-fabric:<rinku_version>-<minecraft_version>"
 }
 ```
 
-Replace the MCEF and Minecraft version as required. `modImplementation` makes MCEF available in dev.
+Replace the Rinku and Minecraft version as required. `modImplementation` makes Rinku available in dev.
 
 ### NeoForge
 
@@ -44,29 +44,35 @@ repositories {
 }
 
 dependencies {
-    implementation "de.keksuccino:mcef-neoforge:<mcef_version>-<mc_version>"
+    implementation "de.keksuccino:rinku-neoforge:<rinku_version>-<minecraft_version>"
 }
 ```
 
-NeoForge ships deobfuscated jars by default, so the dependency can be declared with a plain `implementation`. Replace the MCEF and Minecraft version as required.
+NeoForge ships deobfuscated jars by default, so the dependency can be declared with a plain `implementation`. Replace the Rinku and Minecraft version as required.
 
-## Building & Modifying MCEF
+## Building & Modifying Rinku
 
-After cloning this repo, you will need to clone the java-cef git submodule. There is a gradle task for this: `./gradlew cloneJcef`.
+The build resolves the JCEF Java binary and source JARs from the `Keksuccino/jcef-mcef` GitHub release selected by `jcef_commit` in `gradle.properties`; no submodule checkout is required. When updating JCEF, select a lowercase 40-character commit that has a matching `java-cef-<commit>` release containing both `jcef-mcef.jar` and `jcef-mcef-sources.jar`. The same compiled identity selects the matching native runtime release. JCEF classes are flat-merged into Rinku binaries and the upstream source classifier is flat-merged into every Rinku sources JAR, so published metadata needs no transitive JCEF dependency and consumers still receive JCEF sources.
 
 To run the Fabric client: `./gradlew fabricClient`
 To run the NeoForge client: `./gradlew neoforgeClient`
 
 In-game, there is a demo browser if you press F12 after you're loaded into a world (the demo browser only exists when you're running from a development environment).
 
-## Clearing MCEF Cache
+### JCEF runtime cache and checksum trust
 
-MCEF skips the downloader screen once it detects that all required files are present. Remove the following paths to force a fresh download and clean browser data:
+Rinku validates each downloaded runtime archive against the `.sha256` file supplied by the selected endpoint before extraction. This establishes consistency with that endpoint; it is not an independent publisher signature. Mirror policy affects where a missing runtime is downloaded from, while completed cache entries are source-agnostic.
 
-- **Binary bundle (production builds):** `<game directory>/mods/mcef-libraries`
-- **Binary bundle (development runs):** `<repo>/fabric/build/mcef-libraries` or `<repo>/neoforge/build/mcef-libraries` (the folder next to the active module's `build` directory)
-- **Checksum files:** any `<platform>.tar.gz.sha256` inside the relevant `mcef-libraries` folder; removing these alongside the binaries guarantees the downloader runs again
-- **JCEF profile/cache:** `<game directory>/mods/mcef-cache`
-- **Config overrides:** `<game directory>/config/mcef/mcef.properties` (delete or edit this file if it sets `skip-download=true`)
+Each complete installation is published atomically under `<game instance>/rinku-libraries/jcef-v1/<platform>/<java-cef commit>`. Rinku reuses only the structurally valid entry for the exact commit compiled into the mod. `skip-download=true` therefore requires that exact completed entry to exist already.
+
+## Clearing Rinku Cache
+
+Rinku skips the downloader screen once it detects that the exact compiled JCEF runtime is complete. Remove the following paths when needed:
+
+- **JCEF runtime installations:** `<game instance>/rinku-libraries`. Development game instances are `<repo>/fabric/run_client` for Fabric and `<repo>/run_client` for NeoForge with the supplied run configurations.
+- **Config overrides:** `<game instance>/config/rinku/rinku.properties` (delete or edit this file if it sets `skip-download=true`).
+- **Persistent browser data:** `%LOCALAPPDATA%\Rinku\cef-cache` on Windows, `~/Library/Application Support/Rinku/cef-cache` on macOS, or `${XDG_DATA_HOME:-~/.local/share}/rinku/cef-cache` on Linux.
+
+Stop every Minecraft instance using a cache before removing it. Rinku intentionally never auto-deletes completed directories for older commits; delete the selected completed commit directory, or the whole `rinku-libraries` tree, manually only while those instances are stopped.
 
 After clearing these locations, restart the game and the Download screen will reappear to fetch a fresh Chromium bundle.
