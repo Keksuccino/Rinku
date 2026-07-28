@@ -1,8 +1,8 @@
 <p align="center">
-<img width="64" alt="rinku_icon" src="https://github.com/user-attachments/assets/c11845ff-b57c-4e15-928f-19055874903c" />
+<img width="100" alt="rinku_icon" src="https://github.com/user-attachments/assets/900ef024-282d-4d88-a5c2-01234c084faa" />
 </p>
 
-# Rinku (Minecraft Chromium Embedded Framework)
+## About
 
 Rinku is a mod and library for adding the Chromium web browser into Minecraft.
 
