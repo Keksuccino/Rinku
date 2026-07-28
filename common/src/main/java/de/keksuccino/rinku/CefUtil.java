@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * This class mostly just interacts with org.cef.* for internal use in {@link Rinku}
+ * This class mostly just interacts with org.cef.* for internal use in {@link Rinku}.
  */
 final class CefUtil {
 
