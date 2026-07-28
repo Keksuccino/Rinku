@@ -29,19 +29,9 @@ import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** Downloads and atomically installs the exact java-cef build compiled into Rinku. */
 public class RinkuDownloader {
+
     private static final Logger LOGGER = LogUtils.getLogger();
-
-    @FunctionalInterface
-    interface ArtifactDownloader {
-        void download(String assetUrl, File outputFile, long maxBytes) throws IOException;
-    }
-
-    @FunctionalInterface
-    interface ArchiveExtractor {
-        void extract(InputStream archive, File outputDirectory) throws IOException;
-    }
 
     public static final String OFFICIAL_MIRROR = "https://github.com/Keksuccino/jcef-mcef/releases/download";
     public static final String PREVIOUS_OFFICIAL_MIRROR = "https://github.com/Keksuccino/mcef_resources/releases/download";
@@ -54,11 +44,14 @@ public class RinkuDownloader {
     private static final Pattern BSD_SHA256_PATTERN = Pattern.compile("(?i)^SHA256[ \\t]*\\(([^\\r\\n]+)\\)[ \\t]*=[ \\t]*([0-9a-f]{64})$");
     private static final Pattern SHA256_PATTERN = Pattern.compile("[0-9a-f]{64}");
 
-    public enum MirrorPolicy {
-        OFFICIAL_ONLY,
-        PREFER_CONFIGURED,
-        CONFIGURED_ONLY
-    }
+    private final String host;
+    private final RinkuDownloadMirror configuredMirror;
+    private final String javaCefCommitHash;
+    private final OSPlatform platform;
+    private final DownloadPolicy downloadPolicy;
+    private final Path librariesDirectoryOverride;
+    private final ArtifactDownloader artifactDownloader;
+    private final ArchiveExtractor archiveExtractor;
 
     /** Installer network and decompression limits. */
     public record DownloadPolicy(MirrorPolicy mirrorPolicy, boolean enforceChecksums, int connectTimeoutMs, int readTimeoutMs, long maxArchiveBytes, long maxChecksumBytes, long maxExtractedBytes) {
@@ -81,15 +74,6 @@ public class RinkuDownloader {
             installationDirectory = Objects.requireNonNull(installationDirectory, "JCEF installation directory must not be null").toAbsolutePath().normalize();
         }
     }
-
-    private final String host;
-    private final RinkuDownloadMirror configuredMirror;
-    private final String javaCefCommitHash;
-    private final OSPlatform platform;
-    private final DownloadPolicy downloadPolicy;
-    private final Path librariesDirectoryOverride;
-    private final ArtifactDownloader artifactDownloader;
-    private final ArchiveExtractor archiveExtractor;
 
     public RinkuDownloader(String host, OSPlatform platform) {
         this(host, JcefRuntimeIdentity.JAVA_CEF_COMMIT, platform, DownloadPolicy.defaults(), null, null, null);
@@ -506,4 +490,21 @@ public class RinkuDownloader {
         }
         return new IOException("Failed to obtain and validate a JCEF release from the permitted mirror set", failure);
     }
+
+    public enum MirrorPolicy {
+        OFFICIAL_ONLY,
+        PREFER_CONFIGURED,
+        CONFIGURED_ONLY
+    }
+
+    @FunctionalInterface
+    interface ArtifactDownloader {
+        void download(String assetUrl, File outputFile, long maxBytes) throws IOException;
+    }
+
+    @FunctionalInterface
+    interface ArchiveExtractor {
+        void extract(InputStream archive, File outputDirectory) throws IOException;
+    }
+
 }
