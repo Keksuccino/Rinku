@@ -1,5 +1,6 @@
 package de.keksuccino.rinku.example;
 
+import com.mojang.blaze3d.pipeline.RenderPipeline;
 import de.keksuccino.rinku.Rinku;
 import de.keksuccino.rinku.RinkuBrowser;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -246,8 +247,11 @@ public class ExampleScreen extends Screen {
 
         int frameRenderWidth = getBrowserWidth();
         int frameRenderHeight = getBrowserHeight();
+        // CEF's transparent OSR surface contains premultiplied colors. The ordinary GUI pipeline multiplies those
+        // colors by alpha a second time, producing dark fringes around translucent web content.
+        RenderPipeline renderPipeline = browser.getRenderer().isTransparent() ? RenderPipelines.GUI_TEXTURED_PREMULTIPLIED_ALPHA : RenderPipelines.GUI_TEXTURED;
         guiGraphics.blit(
-                RenderPipelines.GUI_TEXTURED,
+                renderPipeline,
                 textureLocation,
                 getBrowserX(),
                 getBrowserY(),
