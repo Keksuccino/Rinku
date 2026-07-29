@@ -8,6 +8,9 @@
 - Rinku now uses the latest available Chromium/CEF build: `151.0.7922.34`.
 - Rinku's JCEF fork added lots of API hooks missing from the official upstream JCEF, for maximum browser customizability and control.
   - A very detailed changelog for lots of the changes that were made can be found in the `Keksuccini/jcef-rinku` repository (CHANGELOG.md).
+- The FPS are now uncapped and can be higher than 30. They are 60 by default now, and can even be manually set to higher values for each browser instance.
+- It is now possible to mute a whole browser window/tab.
+
 
 
 
