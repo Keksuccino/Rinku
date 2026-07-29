@@ -361,13 +361,16 @@ public class RinkuBrowser extends CefBrowserOsr {
 
     private void onPaintRenderThread(boolean popup, Rectangle[] dirtyRects, ByteBuffer buffer, int width, int height, Rectangle popupRect, boolean showPopupSnapshot, long popupStateGeneration, boolean forceFullUpload) {
         try {
+            // Pixel-unpack alignment is global and may be inherited from another renderer; CEF BGRA pixels require four-byte alignment.
+            GlStateManager._pixelStore(GL_UNPACK_ALIGNMENT, 4);
             uploadPaintOnRenderThread(popup, dirtyRects, buffer, width, height, popupRect, showPopupSnapshot, popupStateGeneration, forceFullUpload);
         } finally {
-            // GL pixel-unpack state is global. Leaving CEF's row stride or offsets active corrupts later vanilla,
+            // GL pixel-unpack state is global. Leaving CEF's row stride, offsets, or alignment active corrupts later vanilla,
             // Sodium, or Iris texture uploads that correctly assume OpenGL's default zero values.
             GlStateManager._pixelStore(GL_UNPACK_ROW_LENGTH, 0);
             GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, 0);
             GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, 0);
+            GlStateManager._pixelStore(GL_UNPACK_ALIGNMENT, 4);
         }
     }
 

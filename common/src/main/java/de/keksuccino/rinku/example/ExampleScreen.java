@@ -2,6 +2,7 @@ package de.keksuccino.rinku.example;
 
 import de.keksuccino.rinku.Rinku;
 import de.keksuccino.rinku.RinkuBrowser;
+import de.keksuccino.rinku.RinkuBrowserTextureBlitter;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -9,7 +10,6 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
 import org.cef.browser.CefBrowser;
 import org.cef.browser.CefFrame;
 import org.cef.handler.CefDisplayHandler;
@@ -242,17 +242,9 @@ public class ExampleScreen extends Screen {
     }
 
     private void renderBrowserTexture(GuiGraphics guiGraphics) {
-
-        // Get the ResourceLocation for the browser texture
-        ResourceLocation textureLocation = browser.getTextureIdentifier();
-        if (textureLocation == null) {
-            return;
-        }
-
         int frameRenderWidth = getBrowserWidth();
         int frameRenderHeight = getBrowserHeight();
-        guiGraphics.blit(textureLocation, getBrowserX(), getBrowserY(), 0.0F, 0.0F, frameRenderWidth, frameRenderHeight, frameRenderWidth, frameRenderHeight);
-
+        RinkuBrowserTextureBlitter.blit(guiGraphics, browser, getBrowserX(), getBrowserY(), frameRenderWidth, frameRenderHeight);
     }
 
     private void renderLoadingIndicator(GuiGraphics guiGraphics) {
