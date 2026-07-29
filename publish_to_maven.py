@@ -134,7 +134,7 @@ def load_project_properties(project_dir: Path) -> ProjectProperties:
         raise PublishError(f"java_version must be a number, got: {java_version_text}") from exc
 
     return ProjectProperties(
-        project_version=properties.get("version") or properties["mod_version"],
+        project_version=properties.get("version") or "1.0.0",
         group=properties.get("group") or "de.keksuccino",
         minecraft_version=properties["minecraft_version"],
         mod_version=properties["mod_version"],
