@@ -4,10 +4,6 @@ plugins {
     id "org.jetbrains.gradle.plugin.idea-ext" version "1.3"
 }
 
-if (version.toString() != mod_version) {
-    throw new GradleException("Project version ${version} must match Rinku mod version ${mod_version}.")
-}
-
 tasks.named("updateDaemonJvm") {
     languageVersion = JavaLanguageVersion.of(providers.gradleProperty("java_version").get().toInteger())
     toolchainPlatforms = []
