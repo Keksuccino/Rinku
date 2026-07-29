@@ -23,14 +23,12 @@ dependencies {
     implementation project(":common")
     include(implementation(annotationProcessor("io.github.llamalad7:mixinextras-fabric:${mixin_extras_version}")))
     modImplementation "maven.modrinth:modmenu:${modmenu_version}"
-    if (providers.gradleProperty("rinku.enableSodiumIris").map { it.toBoolean() }.orElse(true).get()) {
-        modRuntimeOnly "maven.modrinth:sodium:${sodium_version}"
-        modRuntimeOnly "maven.modrinth:iris:${iris_version}"
-        // Loom removes Sodium's nested-JAR declaration while remapping the Modrinth Maven artifact. Restore the
-        // exact embedded JOML release to the development classpath so the 1.19.2 compatibility run matches the
-        // published Sodium JAR instead of failing before Minecraft initializes.
-        runtimeOnly "org.joml:joml:1.10.4"
-    }
+    modRuntimeOnly "maven.modrinth:sodium:${sodium_version}"
+    modRuntimeOnly "maven.modrinth:iris:${iris_version}"
+    // Loom removes Sodium's nested-JAR declaration while remapping the Modrinth Maven artifact. Restore the
+    // exact embedded JOML release to the development classpath so the 1.19.2 compatibility run matches the
+    // published Sodium JAR instead of failing before Minecraft initializes.
+    runtimeOnly "org.joml:joml:1.10.4"
     testImplementation "org.junit.jupiter:junit-jupiter-api:5.10.2"
     testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:5.10.2"
     testRuntimeOnly "org.junit.platform:junit-platform-launcher:1.10.2"

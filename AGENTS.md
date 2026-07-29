@@ -44,7 +44,7 @@
 - Do not simply implement things without a second thought. Simulate in your reasoning STEP-BY-STEP what each step of the execution chain of the code you implemented does, where it does something, and what could be side effects of it. Chase the whole code execution chain step-by-step, to notice edge cases, incomplete implementations, bugs, etc.
 - Always implement everything in the best way possible. Implement everything in the most optimized, performance-friendly, and professional way, following best practices for everything.
 - Never rush tasks. It doesn't matter how long a task will take, you always take the best possible route instead of the fastest.
-- Everything always needs to be fully compatible with Sodium and Iris. Both mods are enabled in Fabric development runs by default; use `-Prinku.enableSodiumIris=false` for the explicit vanilla-renderer variant.
+- Everything always needs to be fully compatible with Sodium and Iris. Both mods are normal, unconditional Fabric development-runtime dependencies; there is no property for disabling them.
 - Everything always needs to work with and without Sodium and Iris.
 - Always clean up after yourself! When finishing a task, remove leftover code from testing, code from earlier unsuccessful implementation attempts, and dead code.
 - When you work with Vanilla Minecraft code, or Iris/Sodium, always deeply analyze the source code for these, so you really understand what you are working with and how the related code works.
@@ -78,7 +78,7 @@
 - Before finishing, run the complete Fabric suite with Java 17 using `JAVA_HOME=$(/usr/libexec/java_home -v 17) sh gradlew :fabric:test --stacktrace`, then compile Fabric and Forge. Use `--rerun-tasks` for the final test run when cached results could hide whether the current tree was executed.
 - Report the number of discovered suites/tests and the passed, failed, errored, and skipped totals.
 - A successful compile or an up-to-date Gradle task does not replace an executed regression test.
-- After compiling and normal tests succeeded, run `:fabric:runClient` both with and without Sodium/Iris and run `:forge:runClient`; inspect complete logs for Mixin/JCEF/render failures and always close every client process afterward.
+- After compiling and normal tests succeeded, run `:fabric:runClient` and `:forge:runClient`; inspect complete logs for Mixin/JCEF/render failures and always close every client process afterward.
 - Never try to control the client, for example with "Computer Use".
 - You can add temporary testing code to the mod that executes on client launch or when it hits the Title screen or something, for getting feedback from the game process directly, for things like shader testing and other stuff you need the actual Minecraft process for. Make sure to remove that testing code after.
 - There are tools available on the system to validate GLSL shaders. Use these when working with shaders.

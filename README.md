@@ -56,7 +56,7 @@ Minecraft 1.19.2 consumers can draw a ready browser through `RinkuBrowserTexture
 
 The build resolves the JCEF Java binary and source JARs from the `Keksuccino/jcef-rinku` GitHub release selected by `jcef_commit` in `gradle.properties`; no submodule checkout is required. When updating JCEF, select a lowercase 40-character commit that has a matching `java-cef-<commit>` release containing both `jcef-rinku.jar` and `jcef-rinku-sources.jar`. The same compiled identity selects the matching native runtime release. JCEF classes are flat-merged into Rinku binaries and the upstream source classifier is flat-merged into every Rinku sources JAR, so published metadata needs no transitive JCEF dependency and consumers still receive JCEF sources.
 
-Use Java 17 for builds and development runs. Run the Fabric client with Sodium and Iris using `./gradlew :fabric:runClient`; use `./gradlew :fabric:runClient -Prinku.enableSodiumIris=false` for the vanilla-renderer configuration. Run Forge with `./gradlew :forge:runClient`.
+Use Java 17 for builds and development runs. Run the Fabric client with `./gradlew :fabric:runClient` and the Forge client with `./gradlew :forge:runClient`.
 
 In-game, there is a demo browser if you press F12 after you're loaded into a world (the demo browser only exists when you're running from a development environment).
 
