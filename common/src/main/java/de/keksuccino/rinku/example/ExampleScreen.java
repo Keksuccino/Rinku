@@ -1,5 +1,6 @@
 package de.keksuccino.rinku.example;
 
+import com.mojang.blaze3d.pipeline.RenderPipeline;
 import de.keksuccino.rinku.Rinku;
 import de.keksuccino.rinku.RinkuBrowser;
 import net.minecraft.client.gui.GuiGraphics;
@@ -234,8 +235,14 @@ public class ExampleScreen extends Screen {
 
         int frameRenderWidth = getBrowserWidth();
         int frameRenderHeight = getBrowserHeight();
-        guiGraphics.blit(RenderPipelines.GUI_TEXTURED, textureLocation, getBrowserX(), getBrowserY(), 0.0F, 0.0F, frameRenderWidth, frameRenderHeight, frameRenderWidth, frameRenderHeight);
+        // CEF's transparent OSR buffer is premultiplied; straight-alpha blending would darken translucent edges.
+        RenderPipeline renderPipeline = selectBrowserRenderPipeline(browser.getRenderer().isTransparent());
+        guiGraphics.blit(renderPipeline, textureLocation, getBrowserX(), getBrowserY(), 0.0F, 0.0F, frameRenderWidth, frameRenderHeight, frameRenderWidth, frameRenderHeight);
 
+    }
+
+    static RenderPipeline selectBrowserRenderPipeline(boolean transparent) {
+        return transparent ? RenderPipelines.GUI_TEXTURED_PREMULTIPLIED_ALPHA : RenderPipelines.GUI_TEXTURED;
     }
 
     private void renderLoadingIndicator(GuiGraphics guiGraphics) {
