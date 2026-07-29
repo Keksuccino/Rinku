@@ -307,6 +307,7 @@ subprojects {
 
     tasks.withType(Test).configureEach {
         systemProperty "rinku.test.jcefCommit", jcefCommit
+        systemProperty "rinku.test.projectDir", rootProject.projectDir.absolutePath
     }
 
     processResources {

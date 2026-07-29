@@ -360,6 +360,22 @@ public class RinkuBrowser extends CefBrowserOsr {
     }
 
     private void onPaintRenderThread(boolean popup, Rectangle[] dirtyRects, ByteBuffer buffer, int width, int height, Rectangle popupRect, boolean showPopupSnapshot, long popupStateGeneration, boolean forceFullUpload) {
+        try {
+            // CEF supplies four-byte BGRA pixels. Establish this explicitly because unpack alignment is global and
+            // another renderer may have changed it before Rinku's render-thread mailbox is drained.
+            GlStateManager._pixelStore(GL_UNPACK_ALIGNMENT, 4);
+            uploadPaintOnRenderThread(popup, dirtyRects, buffer, width, height, popupRect, showPopupSnapshot, popupStateGeneration, forceFullUpload);
+        } finally {
+            // These parameters are global OpenGL state. Restore Minecraft's conventional defaults once after the
+            // complete transaction so ROW_LENGTH remains valid across every dirty rectangle in the callback.
+            GlStateManager._pixelStore(GL_UNPACK_ROW_LENGTH, 0);
+            GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, 0);
+            GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, 0);
+            GlStateManager._pixelStore(GL_UNPACK_ALIGNMENT, 4);
+        }
+    }
+
+    private void uploadPaintOnRenderThread(boolean popup, Rectangle[] dirtyRects, ByteBuffer buffer, int width, int height, Rectangle popupRect, boolean showPopupSnapshot, long popupStateGeneration, boolean forceFullUpload) {
         if (!popup) {
             if (forceFullUpload || lastWidth != width || lastHeight != height || !renderer.supportsDirtyRectUpload()) {
                 lastWidth = width;
