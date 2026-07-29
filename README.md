@@ -54,10 +54,6 @@ ForgeGradle consumers must deobfuscate the dependency with `fg.deobf`. Replace t
 
 The build resolves the JCEF Java binary and source JARs from the `Keksuccino/jcef-rinku` GitHub release selected by `jcef_commit` in `gradle.properties`; no submodule checkout is required. When updating JCEF, select a lowercase 40-character commit that has a matching `java-cef-<commit>` release containing both `jcef-rinku.jar` and `jcef-rinku-sources.jar`. The same compiled identity selects the matching native runtime release. JCEF classes are flat-merged into Rinku binaries and the upstream source classifier is flat-merged into every Rinku sources JAR, so published metadata needs no transitive JCEF dependency and consumers still receive JCEF sources.
 
-To run the Fabric client with the pinned Sodium and Iris compatibility set: `./gradlew :fabric:runClient`
-To run the Fabric client without those optional compatibility mods: `./gradlew :fabric:runClient -Prinku.disableRenderingCompatMods=true`
-To run the Forge client: `./gradlew :forge:Client`
-
 In-game, there is a demo browser if you press F12 after you're loaded into a world (the demo browser only exists when you're running from a development environment).
 
 ### JCEF runtime cache and checksum trust
