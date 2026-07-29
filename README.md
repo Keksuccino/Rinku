@@ -30,7 +30,7 @@ repositories {
 }
 
 dependencies {
-    modImplementation "de.keksuccino:rinku-fabric:2.2.1-26.2"
+    modImplementation "de.keksuccino:rinku-fabric:3.0.0-26.2"
 }
 ```
 
@@ -44,7 +44,7 @@ repositories {
 }
 
 dependencies {
-    implementation "de.keksuccino:rinku-neoforge:2.2.1-26.2"
+    implementation "de.keksuccino:rinku-neoforge:3.0.0-26.2"
 }
 ```
 
