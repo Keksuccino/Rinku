@@ -16,6 +16,7 @@ class RinkuMetadataPackageTest {
         String metadata = readResource("rinku.mixins.json");
 
         assertTrue(metadata.contains("\"package\": \"de.keksuccino.rinku.mixins\""));
+        assertTrue(metadata.contains("\"compatibilityLevel\": \"JAVA_25\""));
         assertTrue(metadata.contains("\"MixinClientPackSource\""));
         assertFalse(metadata.contains("\"MixinGui\""));
         assertTrue(metadata.contains("\"MixinMinecraft\""));
@@ -30,6 +31,7 @@ class RinkuMetadataPackageTest {
 
         assertTrue(modMetadata.contains("de.keksuccino.rinku.RinkuFabric"));
         assertTrue(mixinMetadata.contains("\"package\": \"de.keksuccino.rinku.mixins.fabric\""));
+        assertTrue(mixinMetadata.contains("\"compatibilityLevel\": \"JAVA_25\""));
         assertFalse(modMetadata.contains("\"preLaunch\""));
         assertFalse(modMetadata.contains("RinkuFabricBootstrap"));
         assertFalse(modMetadata.contains("cinemamod"));

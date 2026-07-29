@@ -18,9 +18,9 @@ dependencies {
     implementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
     implementation "net.fabricmc.fabric-api:fabric-api:${fabric_version}"
     implementation group: 'com.google.code.findbugs', name: 'jsr305', version: '3.0.1'
-    implementation project(":common")
+    compileOnly project(":common")
     include(implementation(annotationProcessor("io.github.llamalad7:mixinextras-fabric:${mixin_extras_version}")))
-    implementation "maven.modrinth:modmenu:18.0.0-alpha.8"
+    implementation "maven.modrinth:modmenu:${modmenu_version}"
     if (enableRenderCompatibilityMods.get()) {
         runtimeOnly "maven.modrinth:sodium:${sodium_version}"
         runtimeOnly "maven.modrinth:iris:${iris_version}"

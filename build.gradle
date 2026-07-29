@@ -324,6 +324,7 @@ subprojects {
                 "fabric_version": fabric_version,
                 "fabric_short_version": fabric_short_version,
                 "fabric_loader_version": fabric_loader_version,
+                "modmenu_version": modmenu_version,
                 "sodium_version": sodium_version,
                 "iris_version": iris_version,
                 "neoforge_version": neoforge_version,
