@@ -82,9 +82,3 @@
 - You can add temporary testing code to the mod that executes on client launch or when it hits the Title screen or something, for getting feedback from the game process directly, for things like shader testing and other stuff you need the actual Minecraft process for. Make sure to remove that testing code after.
 - There are tools available on the system to validate GLSL shaders. Use these when working with shaders.
 - You always TRIPLE-CHECK EVERYTHING! When you are finishing a task, you triple-check everything for completeness, possible bad implementations, rushed implementations, performance, optimization, structurization, and so on.
-
-## Subagents
-- Always spawn ALL your subagents with the gpt-5.6 (Sol) model on "max" reasoning effort.
-- Always spawn ALL your subagents with a CLEAN context (do not give them your context), so they have a clean context for doing their task in the best possible way.
-- Since you spawn subagents without context, make sure to properly explain everything important to them, because they do not have your memories.
-
