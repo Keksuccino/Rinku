@@ -332,8 +332,6 @@ subprojects {
                 "fabric_short_version": fabric_short_version,
                 "fabric_loader_version": fabric_loader_version,
                 "modmenu_version": modmenu_version,
-                "sodium_modrinth_version": sodium_modrinth_version,
-                "iris_modrinth_version": iris_modrinth_version,
                 "neoforge_version": neoforge_version,
                 "neoforge_loader_version": neoforge_loader_version,
                 "parchment_version": parchment_version,
