@@ -1,4 +1,18 @@
-## [2.2.0]
+
+## RINKU v3.0.0
+
+- Keksuccino's fork of MCEF is now officially called "Rinku".
+  - This was done because I ended up changing more and more of the original MCEF code, structure, and backend, which resulted in barely having anything "MCEF" left.
+  - Another big problem was keeping backwards compat, so I changed the name for a fresh new chapter, where I can yeet most of backwards compat in favor of modernizing lots of stuff.
+- Rinku now uses the latest upstream build of JCEF, modified to work in Minecraft.
+- Rinku now uses the latest available Chromium/CEF build: `151.0.7922.34`.
+- Rinku's JCEF fork added lots of API hooks missing from the official upstream JCEF, for maximum browser customizability and control.
+  - A very detailed changelog for lots of the changes that were made can be found in the `Keksuccini/jcef-rinku` repository (CHANGELOG.md).
+
+
+
+
+## MCEF v2.2.0
 
 ### Added
 - Added native file download support in the MCEF client wrapper.
