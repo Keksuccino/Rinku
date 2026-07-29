@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "de.keksuccino.rinku.mixins.fabric",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "rinku.refmap.json",
+  "mixins": [
+  ],
+  "client": [
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
