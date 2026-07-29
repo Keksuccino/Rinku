@@ -1,5 +1,7 @@
 package de.keksuccino.rinku.example;
 
+import com.mojang.blaze3d.platform.GlStateManager;
+import com.mojang.blaze3d.systems.RenderSystem;
 import de.keksuccino.rinku.Rinku;
 import de.keksuccino.rinku.RinkuBrowser;
 import net.minecraft.Util;
@@ -239,7 +241,22 @@ public class ExampleScreen extends Screen {
 
         int frameRenderWidth = getBrowserWidth();
         int frameRenderHeight = getBrowserHeight();
-        guiGraphics.blit(textureLocation, getBrowserX(), getBrowserY(), 0.0F, 0.0F, frameRenderWidth, frameRenderHeight, frameRenderWidth, frameRenderHeight);
+        if (!browser.getRenderer().isTransparent()) {
+            guiGraphics.blit(textureLocation, getBrowserX(), getBrowserY(), 0.0F, 0.0F, frameRenderWidth, frameRenderHeight, frameRenderWidth, frameRenderHeight);
+            return;
+        }
+
+        // Chromium's transparent OSR surface is premultiplied. GuiGraphics' ordinary blit leaves blending disabled,
+        // while its tinted overload uses straight alpha; both are wrong for translucent web pixels.
+        RenderSystem.enableBlend();
+        RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA, GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
+        try {
+            guiGraphics.blit(textureLocation, getBrowserX(), getBrowserY(), 0.0F, 0.0F, frameRenderWidth, frameRenderHeight, frameRenderWidth, frameRenderHeight);
+        } finally {
+            // Screen rendering enters with blending disabled; restore that postcondition for widgets and other mods.
+            RenderSystem.defaultBlendFunc();
+            RenderSystem.disableBlend();
+        }
 
     }
 
