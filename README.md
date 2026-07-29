@@ -30,7 +30,7 @@ repositories {
 }
 
 dependencies {
-    modImplementation "de.keksuccino:rinku-fabric:<rinku_version>-<minecraft_version>"
+    modImplementation "de.keksuccino:rinku-fabric:3.0.0-1.21.1"
 }
 ```
 
@@ -44,7 +44,7 @@ repositories {
 }
 
 dependencies {
-    implementation "de.keksuccino:rinku-neoforge:<rinku_version>-<minecraft_version>"
+    implementation "de.keksuccino:rinku-neoforge:3.0.0-1.21.1"
 }
 ```
 
@@ -52,7 +52,7 @@ NeoForge ships deobfuscated jars by default, so the dependency can be declared w
 
 ## Building & Modifying Rinku
 
-The build resolves the JCEF Java binary and source JARs from the `Keksuccino/jcef-mcef` GitHub release selected by `jcef_commit` in `gradle.properties`; no submodule checkout is required. When updating JCEF, select a lowercase 40-character commit that has a matching `java-cef-<commit>` release containing both `jcef-mcef.jar` and `jcef-mcef-sources.jar`. The same compiled identity selects the matching native runtime release. JCEF classes are flat-merged into Rinku binaries and the upstream source classifier is flat-merged into every Rinku sources JAR, so published metadata needs no transitive JCEF dependency and consumers still receive JCEF sources.
+The build resolves the JCEF Java binary and source JARs from the `Keksuccino/jcef-rinku` GitHub release selected by `jcef_commit` in `gradle.properties`; no submodule checkout is required. When updating JCEF, select a lowercase 40-character commit that has a matching `java-cef-<commit>` release containing both `jcef-rinku.jar` and `jcef-rinku-sources.jar`. The same compiled identity selects the matching native runtime release. JCEF classes are flat-merged into Rinku binaries and the upstream source classifier is flat-merged into every Rinku sources JAR, so published metadata needs no transitive JCEF dependency and consumers still receive JCEF sources.
 
 To run the Fabric client: `./gradlew fabricClient`
 To run the NeoForge client: `./gradlew neoforgeClient`
