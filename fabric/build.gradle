@@ -23,8 +23,8 @@ dependencies {
     implementation project(":common")
     include(implementation(annotationProcessor("io.github.llamalad7:mixinextras-fabric:${mixin_extras_version}")))
     modImplementation "maven.modrinth:modmenu:${modmenu_version}"
-    modRuntimeOnly "maven.modrinth:sodium:${sodium_version}"
-    modRuntimeOnly "maven.modrinth:iris:${iris_version}"
+    modRuntimeOnly "maven.modrinth:sodium:mc1.19.2-0.4.4"
+    modRuntimeOnly "maven.modrinth:iris:1.6.11+1.19.2"
     // Loom removes Sodium's nested-JAR declaration while remapping the Modrinth Maven artifact. Restore the
     // exact embedded JOML release to the development classpath so the 1.19.2 compatibility run matches the
     // published Sodium JAR instead of failing before Minecraft initializes.
