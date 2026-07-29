@@ -63,8 +63,6 @@ tasks.withType(Javadoc).configureEach {
 }
 tasks.withType(Test).configureEach {
     useJUnitPlatform()
-    // Allow builds when there are test sources but no matching tests.
-    failOnNoDiscoveredTests = false
 }
 tasks.named("sourcesJar", Jar) {
     dependsOn(project(":common").tasks.named("generateJcefRuntimeIdentity"))

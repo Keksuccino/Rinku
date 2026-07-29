@@ -151,6 +151,19 @@ subprojects {
 
         exclusiveContent {
             forRepository {
+                maven {
+                    name = 'Minecraft Libraries'
+                    url = 'https://libraries.minecraft.net/'
+                }
+            }
+            filter {
+                // Minecraft 1.21.1 requests Mojang's patched macOS LWJGL classifiers, which are not on Central.
+                includeGroupByRegex 'org\\.lwjgl(\\..*)?'
+            }
+        }
+
+        exclusiveContent {
+            forRepository {
                 ivy {
                     name = "Keksuccino JCEF GitHub Releases"
                     url = uri("https://github.com/Keksuccino/jcef-rinku/releases/download")
