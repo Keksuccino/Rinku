@@ -56,9 +56,6 @@ The build resolves the JCEF Java binary and source JARs from the `Keksuccino/jce
 
 Use Java 21 for all build and run tasks. The published artifacts are `rinku-fabric:3.0.0-1.21.11` and `rinku-neoforge:3.0.0-1.21.11`.
 
-To run the Fabric client: `./gradlew :fabric:runClient`
-To run the NeoForge client: `./gradlew :neoforge:runClient`
-
 In-game, there is a demo browser if you press F12 after you're loaded into a world (the demo browser only exists when you're running from a development environment).
 
 ### JCEF runtime cache and checksum trust
