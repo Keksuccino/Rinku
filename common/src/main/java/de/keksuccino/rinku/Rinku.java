@@ -242,7 +242,9 @@ public final class Rinku {
         if (getPreloadedBrowserPoolTarget(transparent) > 0) {
             synchronized (PRELOADED_BROWSER_POOL_LOCK) {
                 Deque<RinkuBrowser> pool = getPreloadedBrowserPool(transparent);
-                browser = pool.pollFirst();
+                // createImmediately() publishes the wrapper before JCEF finishes native creation. isValid() is the
+                // authoritative readiness gate because loadURL() is silently lost while that native object is absent.
+                browser = ReadyResourceQueue.pollFirstReady(pool, RinkuBrowser::isValid);
             }
         }
 
