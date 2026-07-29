@@ -360,6 +360,17 @@ public class RinkuBrowser extends CefBrowserOsr {
     }
 
     private void onPaintRenderThread(boolean popup, Rectangle[] dirtyRects, ByteBuffer buffer, int width, int height, Rectangle popupRect, boolean showPopupSnapshot, long popupStateGeneration, boolean forceFullUpload) {
+        // Pixel-store fields are global GL context state. Keep the whole view/popup transaction isolated because
+        // dirty rectangles intentionally share their row-length setting across multiple sub-uploads.
+        try {
+            GlStateManager._pixelStore(GL_UNPACK_ALIGNMENT, 4);
+            uploadPaintOnRenderThread(popup, dirtyRects, buffer, width, height, popupRect, showPopupSnapshot, popupStateGeneration, forceFullUpload);
+        } finally {
+            restoreUnpackPixelStoreDefaults();
+        }
+    }
+
+    private void uploadPaintOnRenderThread(boolean popup, Rectangle[] dirtyRects, ByteBuffer buffer, int width, int height, Rectangle popupRect, boolean showPopupSnapshot, long popupStateGeneration, boolean forceFullUpload) {
         if (!popup) {
             if (forceFullUpload || lastWidth != width || lastHeight != height || !renderer.supportsDirtyRectUpload()) {
                 lastWidth = width;
@@ -437,6 +448,13 @@ public class RinkuBrowser extends CefBrowserOsr {
             }
             popupDrawn = popupPaintState.canComposite(popupStateGeneration, popupRect, showPopupSnapshot);
         }
+    }
+
+    private static void restoreUnpackPixelStoreDefaults() {
+        GlStateManager._pixelStore(GL_UNPACK_ROW_LENGTH, 0);
+        GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, 0);
+        GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, 0);
+        GlStateManager._pixelStore(GL_UNPACK_ALIGNMENT, 4);
     }
 
     private void restorePopupAfterViewPaint(int viewWidth, int viewHeight, Rectangle popupRect, boolean showPopupSnapshot, long popupStateGeneration) {
