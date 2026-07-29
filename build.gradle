@@ -8,6 +8,10 @@ tasks.named("updateDaemonJvm") {
     jvmVersion = JavaLanguageVersion.of(providers.gradleProperty("java_version").get().toInteger())
 }
 
+if (version.toString() != mod_version) {
+    throw new GradleException("Project version ${version} must match Rinku mod version ${mod_version}.")
+}
+
 def rawJcefCommit = providers.gradleProperty("jcef_commit").orNull
 if (rawJcefCommit == null || !(rawJcefCommit ==~ /[0-9a-f]{40}/)) {
     throw new GradleException("gradle.properties jcef_commit must contain exactly one lowercase 40-character hexadecimal Git commit.")
