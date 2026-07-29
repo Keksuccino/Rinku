@@ -146,6 +146,14 @@ public class RinkuBrowser extends CefBrowserOsr {
         return renderer != null && renderer.isTextureReady();
     }
 
+    /**
+     * JCEF creates native browsers asynchronously and does not queue {@code loadURL} before that transition.
+     * A preloaded wrapper must therefore remain in the pool until its native browser is valid.
+     */
+    boolean isNativeBrowserReady() {
+        return isValid();
+    }
+
     public RinkuCursorChangeListener getCursorChangeListener() {
         return cursorChangeListener;
     }

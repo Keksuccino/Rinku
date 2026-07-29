@@ -242,7 +242,7 @@ public final class Rinku {
         if (getPreloadedBrowserPoolTarget(transparent) > 0) {
             synchronized (PRELOADED_BROWSER_POOL_LOCK) {
                 Deque<RinkuBrowser> pool = getPreloadedBrowserPool(transparent);
-                browser = pool.pollFirst();
+                browser = ReadyResourceQueue.pollFirstReady(pool, RinkuBrowser::isNativeBrowserReady);
             }
         }
 
