@@ -17,6 +17,7 @@ if (rawJcefCommit == null || !(rawJcefCommit ==~ /[0-9a-f]{40}/)) {
 ext.jcefCommit = rawJcefCommit
 
 def jcefReleaseGroup = "java-cef"
+ext.jcefBinaryDependencyNotation = "${jcefReleaseGroup}:jcef-rinku:${jcefCommit}@jar"
 
 subprojects {
 
@@ -47,7 +48,7 @@ subprojects {
     configurations.named("testCompileOnly") {
         extendsFrom(jcefApi)
     }
-    dependencies.add(jcefApi.name, "${jcefReleaseGroup}:jcef-rinku:${jcefCommit}@jar")
+    dependencies.add(jcefApi.name, rootProject.jcefBinaryDependencyNotation)
     dependencies.add(jcefSources.name, "${jcefReleaseGroup}:jcef-rinku:${jcefCommit}:sources@jar")
 
     def binaryJar = tasks.named('jar', Jar)
