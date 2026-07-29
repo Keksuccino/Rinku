@@ -23,8 +23,8 @@ dependencies {
     implementation project(":common")
     include(implementation(annotationProcessor("io.github.llamalad7:mixinextras-fabric:${mixin_extras_version}")))
     modImplementation "maven.modrinth:modmenu:7.2.2"
-    modLocalRuntime "maven.modrinth:sodium:${sodium_version}"
-    modLocalRuntime "maven.modrinth:iris:${iris_version}"
+    modLocalRuntime "maven.modrinth:sodium:mc1.20.1-0.5.13-fabric"
+    modLocalRuntime "maven.modrinth:iris:1.7.6+1.20.1"
     testImplementation "org.junit.jupiter:junit-jupiter-api:5.10.2"
     testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:5.10.2"
     testRuntimeOnly "org.junit.platform:junit-platform-launcher:1.10.2"
