@@ -146,6 +146,14 @@ public class RinkuBrowser extends CefBrowserOsr {
         return renderer != null && renderer.isTextureReady();
     }
 
+    /**
+     * JCEF creates native browsers asynchronously and does not queue {@code loadURL} before that transition.
+     * A preloaded wrapper must therefore remain in the pool until native creation has completed.
+     */
+    boolean isNativeBrowserReady() {
+        return isValid();
+    }
+
     public RinkuCursorChangeListener getCursorChangeListener() {
         return cursorChangeListener;
     }
@@ -396,7 +404,7 @@ public class RinkuBrowser extends CefBrowserOsr {
 
                 GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, clippedRect.x);
                 GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, clippedRect.y);
-                renderer.onPaint(buffer, clippedRect.x, clippedRect.y, clippedRect.width, clippedRect.height);
+                renderer.onPaint(buffer, width, clippedRect.x, clippedRect.y, clippedRect.x, clippedRect.y, clippedRect.width, clippedRect.height);
             }
 
             restorePopupAfterViewPaint(width, height, popupRect, showPopupSnapshot, popupStateGeneration);
@@ -442,7 +450,7 @@ public class RinkuBrowser extends CefBrowserOsr {
                 GlStateManager._pixelStore(GL_UNPACK_ROW_LENGTH, width);
                 GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, uploadSource.x());
                 GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, uploadSource.y());
-                renderer.onPaint(buffer, uploadDestination.x(), uploadDestination.y(), uploadDestination.width(), uploadDestination.height());
+                renderer.onPaint(buffer, width, uploadSource.x(), uploadSource.y(), uploadDestination.x(), uploadDestination.y(), uploadDestination.width(), uploadDestination.height());
             }
 
             // Full retained callback pixels are valid even when the popup had no visible destination pixels to upload.
@@ -476,7 +484,7 @@ public class RinkuBrowser extends CefBrowserOsr {
         GlStateManager._pixelStore(GL_UNPACK_ROW_LENGTH, popupRect.width);
         GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, uploadSource.x());
         GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, uploadSource.y());
-        renderer.onPaint(popupBuffer, uploadDestination.x(), uploadDestination.y(), uploadDestination.width(), uploadDestination.height());
+        renderer.onPaint(popupBuffer, popupRect.width, uploadSource.x(), uploadSource.y(), uploadDestination.x(), uploadDestination.y(), uploadDestination.width(), uploadDestination.height());
     }
 
     private void invalidateRetainedPopupPixels() {

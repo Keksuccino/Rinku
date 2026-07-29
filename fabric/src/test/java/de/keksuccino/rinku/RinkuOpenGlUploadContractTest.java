@@ -17,7 +17,7 @@ class RinkuOpenGlUploadContractTest {
     void fullPaintUpdatesPreallocatedGpuTextureWithoutReallocation() throws IOException {
         String rendererSource = readCommonSource("RinkuRenderer.java");
         int fullPaintStart = rendererSource.indexOf("protected void onPaint(ByteBuffer buffer, int width, int height)");
-        int dirtyPaintStart = rendererSource.indexOf("protected void onPaint(ByteBuffer buffer, int x, int y, int width, int height)", fullPaintStart);
+        int dirtyPaintStart = rendererSource.indexOf("protected void onPaint(ByteBuffer buffer, int sourceRowLength", fullPaintStart);
         assertTrue(fullPaintStart >= 0 && dirtyPaintStart > fullPaintStart, "Unable to isolate RinkuRenderer's full-paint upload");
 
         String fullPaint = rendererSource.substring(fullPaintStart, dirtyPaintStart);
