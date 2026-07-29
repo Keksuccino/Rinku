@@ -360,8 +360,8 @@ public class RinkuBrowser extends CefBrowserOsr {
     }
 
     private void onPaintRenderThread(boolean popup, Rectangle[] dirtyRects, ByteBuffer buffer, int width, int height, Rectangle popupRect, boolean showPopupSnapshot, long popupStateGeneration, boolean forceFullUpload) {
-        // Pixel-store fields are global GL context state. Keep the whole view/popup transaction isolated because
-        // dirty rectangles intentionally share their row-length setting across multiple sub-uploads.
+        // Pixel-store fields are global GL context state. Keep the whole view/popup transaction isolated so each
+        // renderer upload can configure its source region without leaking state into Minecraft's render pipeline.
         try {
             GlStateManager._pixelStore(GL_UNPACK_ALIGNMENT, 4);
             uploadPaintOnRenderThread(popup, dirtyRects, buffer, width, height, popupRect, showPopupSnapshot, popupStateGeneration, forceFullUpload);
@@ -380,18 +380,13 @@ public class RinkuBrowser extends CefBrowserOsr {
                 return;
             }
 
-            GlStateManager._bindTexture(renderer.getTextureID());
-            GlStateManager._pixelStore(GL_UNPACK_ROW_LENGTH, width);
-
             for (Rectangle dirtyRect : dirtyRects) {
                 Rectangle clippedRect = clipRect(dirtyRect, width, height);
                 if (clippedRect == null) {
                     continue;
                 }
 
-                GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, clippedRect.x);
-                GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, clippedRect.y);
-                renderer.onPaint(buffer, clippedRect.x, clippedRect.y, clippedRect.width, clippedRect.height);
+                renderer.onPaint(buffer, width, clippedRect.x, clippedRect.y, clippedRect.x, clippedRect.y, clippedRect.width, clippedRect.height);
             }
 
             restorePopupAfterViewPaint(width, height, popupRect, showPopupSnapshot, popupStateGeneration);
@@ -434,10 +429,7 @@ public class RinkuBrowser extends CefBrowserOsr {
                 }
                 PopupPaintGeometry.Region uploadSource = upload.source();
                 PopupPaintGeometry.Region uploadDestination = upload.destination();
-                GlStateManager._pixelStore(GL_UNPACK_ROW_LENGTH, width);
-                GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, uploadSource.x());
-                GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, uploadSource.y());
-                renderer.onPaint(buffer, uploadDestination.x(), uploadDestination.y(), uploadDestination.width(), uploadDestination.height());
+                renderer.onPaint(buffer, width, uploadSource.x(), uploadSource.y(), uploadDestination.x(), uploadDestination.y(), uploadDestination.width(), uploadDestination.height());
             }
 
             // Full retained callback pixels are valid even when the popup had no visible destination pixels to upload.
@@ -475,10 +467,7 @@ public class RinkuBrowser extends CefBrowserOsr {
         PopupPaintGeometry.Upload upload = paintPlan.upload();
         PopupPaintGeometry.Region uploadSource = upload.source();
         PopupPaintGeometry.Region uploadDestination = upload.destination();
-        GlStateManager._pixelStore(GL_UNPACK_ROW_LENGTH, popupRect.width);
-        GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, uploadSource.x());
-        GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, uploadSource.y());
-        renderer.onPaint(popupBuffer, uploadDestination.x(), uploadDestination.y(), uploadDestination.width(), uploadDestination.height());
+        renderer.onPaint(popupBuffer, popupRect.width, uploadSource.x(), uploadSource.y(), uploadDestination.x(), uploadDestination.y(), uploadDestination.width(), uploadDestination.height());
     }
 
     private void invalidateRetainedPopupPixels() {

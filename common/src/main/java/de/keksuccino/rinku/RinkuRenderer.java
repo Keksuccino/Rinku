@@ -75,7 +75,10 @@ public class RinkuRenderer {
     }
 
     public boolean supportsDirtyRectUpload() {
-        return texture instanceof GlTexture && getTextureID() != 0;
+        if (texture == null || texture.isClosed()) return false;
+        // NeoForge may wrap GlTexture for render validation. Its command encoder still supports destination
+        // subregions, while BgraRgbaConverter supplies the tightly packed source region that API requires.
+        return !(texture instanceof GlTexture) || getTextureID() != 0;
     }
 
     public int getTextureWidth() {
@@ -134,21 +137,23 @@ public class RinkuRenderer {
             return;
         }
 
-        uploadWithCommandEncoder(buffer, 0, 0, width, height);
+        uploadWithCommandEncoder(buffer, width, 0, 0, 0, 0, width, height);
     }
 
-    protected void onPaint(ByteBuffer buffer, int x, int y, int width, int height) {
+    protected void onPaint(ByteBuffer buffer, int sourceRowLength, int sourceX, int sourceY, int destinationX, int destinationY, int width, int height) {
         RenderSystem.assertOnRenderThread();
         syncDirectTextureViewIfNeeded();
         if (texture instanceof GlTexture glTexture) {
             // Bind and update sub-region
             GlStateManager._bindTexture(glTexture.glId());
-            glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, width, height, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, buffer);
+            GlStateManager._pixelStore(GL_UNPACK_ROW_LENGTH, sourceRowLength);
+            GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, sourceX);
+            GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, sourceY);
+            glTexSubImage2D(GL_TEXTURE_2D, 0, destinationX, destinationY, width, height, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, buffer);
             return;
         }
 
-        // Fallback upload path assumes a tightly packed source rectangle.
-        uploadWithCommandEncoder(buffer, x, y, width, height);
+        uploadWithCommandEncoder(buffer, sourceRowLength, sourceX, sourceY, destinationX, destinationY, width, height);
     }
 
     private void syncDirectTextureViewIfNeeded() {
@@ -165,17 +170,12 @@ public class RinkuRenderer {
         }
     }
 
-    private void uploadWithCommandEncoder(ByteBuffer buffer, int destinationX, int destinationY, int copyWidth, int copyHeight) {
+    private void uploadWithCommandEncoder(ByteBuffer buffer, int sourceRowLength, int sourceX, int sourceY, int destinationX, int destinationY, int copyWidth, int copyHeight) {
         if (texture == null || buffer == null) {
             return;
         }
 
-        int requiredBytes = copyWidth * copyHeight * 4;
-        if (requiredBytes <= 0 || buffer.capacity() < requiredBytes) {
-            return;
-        }
-
-        ByteBuffer uploadBuffer = convertBgraToRgba(buffer, requiredBytes);
+        ByteBuffer uploadBuffer = convertBgraToRgba(buffer, sourceRowLength, sourceX, sourceY, copyWidth, copyHeight);
         if (uploadBuffer == null) {
             return;
         }
@@ -183,34 +183,21 @@ public class RinkuRenderer {
         RenderSystem.getDevice().createCommandEncoder().writeToTexture(texture, uploadBuffer.slice(), NativeImage.Format.RGBA, 0, 0, destinationX, destinationY, copyWidth, copyHeight);
     }
 
-    private ByteBuffer convertBgraToRgba(ByteBuffer sourceBuffer, int requiredBytes) {
-        if (requiredBytes <= 0 || (requiredBytes & 3) != 0) {
+    private ByteBuffer convertBgraToRgba(ByteBuffer sourceBuffer, int sourceRowLength, int sourceX, int sourceY, int copyWidth, int copyHeight) {
+        long requiredBytesLong = (long) copyWidth * copyHeight * 4L;
+        if (requiredBytesLong <= 0L || requiredBytesLong > Integer.MAX_VALUE) {
             return null;
         }
+        int requiredBytes = (int) requiredBytesLong;
 
         if (fallbackRgbaUploadBuffer == null || fallbackRgbaUploadBuffer.capacity() < requiredBytes) {
             fallbackRgbaUploadBuffer = ByteBuffer.allocateDirect(requiredBytes);
         }
 
-        ByteBuffer src = sourceBuffer.duplicate();
-        src.position(0);
-        src.limit(requiredBytes);
-
         ByteBuffer dst = fallbackRgbaUploadBuffer.duplicate();
         dst.clear();
         dst.limit(requiredBytes);
-
-        for (int i = 0; i < requiredBytes; i += 4) {
-            byte b = src.get(i);
-            byte g = src.get(i + 1);
-            byte r = src.get(i + 2);
-            byte a = src.get(i + 3);
-            dst.put(i, r);
-            dst.put(i + 1, g);
-            dst.put(i + 2, b);
-            dst.put(i + 3, a);
-        }
-
+        if (BgraRgbaConverter.convertRegion(sourceBuffer, sourceRowLength, sourceX, sourceY, copyWidth, copyHeight, dst) != requiredBytes) return null;
         dst.position(0);
         return dst;
     }
