@@ -63,6 +63,7 @@ class Artifact:
     artifact_id: str
     filename_base: str
     jar_source: Path
+    api_jar_source: Path
     sources_source: Path
 
 
@@ -133,7 +134,7 @@ def load_project_properties(project_dir: Path) -> ProjectProperties:
         raise PublishError(f"java_version must be a number, got: {java_version_text}") from exc
 
     return ProjectProperties(
-        project_version=properties.get("version") or "1.0.0",
+        project_version=properties.get("version") or properties["mod_version"],
         group=properties.get("group") or "de.keksuccino",
         minecraft_version=properties["minecraft_version"],
         mod_version=properties["mod_version"],
@@ -250,6 +251,8 @@ def discover_loader_modules(project_dir: Path) -> Tuple[str, ...]:
 
 def select_main_jar(project_dir: Path, properties: ProjectProperties, module: str) -> Path:
     libs_dir = project_dir / module / "build" / "libs"
+    if module == "neoforge":
+        return libs_dir / f"{properties.mod_id}-neoforge-{properties.publish_version}.jar"
     base_name = f"{properties.mod_id}-{properties.project_version}"
     candidates = (
         [libs_dir / f"{base_name}.jar"]
@@ -274,16 +277,22 @@ def build_artifacts(project_dir: Path, properties: ProjectProperties) -> Tuple[A
         artifact_id = f"{properties.mod_id}-{module}"
         filename_base = f"{artifact_id}-{properties.publish_version}"
         libs_dir = project_dir / module / "build" / "libs"
+        jar_source = select_main_jar(project_dir, properties, module)
+        api_jar_source = jar_source
+        sources_source = libs_dir / f"{properties.mod_id}-{properties.project_version}-sources.jar"
+        if module == "neoforge":
+            internal_base = f"{artifact_id}-{properties.publish_version}"
+            api_jar_source = libs_dir / f"{internal_base}-mod.jar"
+            sources_source = libs_dir / f"{internal_base}-sources.jar"
         artifacts.append(
             Artifact(
                 module=module,
                 loader=LOADER_DISPLAY_NAMES[module],
                 artifact_id=artifact_id,
                 filename_base=filename_base,
-                jar_source=select_main_jar(project_dir, properties, module),
-                sources_source=(
-                    libs_dir / f"{properties.mod_id}-{properties.project_version}-sources.jar"
-                ),
+                jar_source=jar_source,
+                api_jar_source=api_jar_source,
+                sources_source=sources_source,
             )
         )
 
@@ -294,7 +303,7 @@ def ensure_build_artifacts_exist(artifacts: Sequence[Artifact]) -> None:
     missing = [
         path
         for artifact in artifacts
-        for path in (artifact.jar_source, artifact.sources_source)
+        for path in (artifact.jar_source, artifact.api_jar_source, artifact.sources_source)
         if not path.exists()
     ]
     if not missing:
@@ -407,10 +416,12 @@ def write_module_metadata(
     path: Path,
     properties: ProjectProperties,
     artifact_id: str,
-    main_file: Path,
+    api_file: Path,
+    runtime_file: Path,
     sources_file: Path,
 ) -> None:
-    main_metadata = artifact_metadata(main_file)
+    api_metadata = artifact_metadata(api_file)
+    runtime_metadata = artifact_metadata(runtime_file)
     sources_metadata = artifact_metadata(sources_file)
 
     metadata = {
@@ -434,7 +445,7 @@ def write_module_metadata(
                     "org.gradle.usage": "java-api",
                 },
                 "files": [
-                    main_metadata,
+                    api_metadata,
                 ],
             },
             {
@@ -447,7 +458,7 @@ def write_module_metadata(
                     "org.gradle.usage": "java-runtime",
                 },
                 "files": [
-                    main_metadata,
+                    runtime_metadata,
                 ],
             },
             {
@@ -477,9 +488,14 @@ def publish_artifact(repo_dir: Path, properties: ProjectProperties, artifact: Ar
         / properties.publish_version
     )
     main_target = target_dir / f"{artifact.filename_base}.jar"
+    api_target = main_target
+    if artifact.api_jar_source != artifact.jar_source:
+        api_target = target_dir / f"{artifact.filename_base}-mod.jar"
     sources_target = target_dir / f"{artifact.filename_base}-sources.jar"
 
     copy_artifact(artifact.jar_source, main_target)
+    if api_target != main_target:
+        copy_artifact(artifact.api_jar_source, api_target)
     copy_artifact(artifact.sources_source, sources_target)
     write_pom(
         target_dir / f"{artifact.filename_base}.pom",
@@ -491,6 +507,7 @@ def publish_artifact(repo_dir: Path, properties: ProjectProperties, artifact: Ar
         target_dir / f"{artifact.filename_base}.module",
         properties,
         artifact.artifact_id,
+        api_target,
         main_target,
         sources_target,
     )

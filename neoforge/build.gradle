@@ -40,15 +40,18 @@ test {
     exclude '**/*'
 }
 
-sourceSets.main.resources { srcDir 'src/generated/resources' }
+sourceSets {
+    main.resources { srcDir 'src/generated/resources' }
+    bootstrap {
+        runtimeClasspath += output + compileClasspath
+    }
+    bootstrapTest {
+        compileClasspath += sourceSets.bootstrap.output
+        runtimeClasspath += output + compileClasspath + sourceSets.bootstrap.output
+    }
+}
 
 jarJar.enable()
-
-def finalJarJar = tasks.named("jarJar", Jar)
-jcefPackagedBinaryArchives.from(finalJarJar.flatMap { it.archiveFile })
-tasks.named("verifyJcefPackaging").configure {
-    dependsOn(finalJarJar)
-}
 
 subsystems {
     parchment {
@@ -60,6 +63,7 @@ subsystems {
 dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.2")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.2")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.10.2")
     implementation "net.neoforged:neoforge:${neoforge_version}"
     //Also needs to get added to the client run configuration (runs -> client -> dependencies) since it's a non-Minecraft library
 //    implementation(jarJar("com.github.DhyanB:Open-Imaging:317b2cb6e5")) {
@@ -70,6 +74,9 @@ dependencies {
 
 // Exclude Fabric Loader from NeoForge
 configurations {
+    bootstrapImplementation.extendsFrom implementation
+    bootstrapTestImplementation.extendsFrom testImplementation
+    bootstrapTestRuntimeOnly.extendsFrom testRuntimeOnly
     runtimeClasspath    { exclude group: 'net.fabricmc', module: 'fabric-loader' }
     developmentRuntimeClasspath {
         // Gradle 8 names used by ForgeGradle 6
@@ -96,17 +103,208 @@ tasks.withType(Javadoc).matching(notNeoTask).configureEach {
 tasks.named("sourcesJar", Jar) {
     dependsOn(project(":common").tasks.named("generateJcefRuntimeIdentity"))
     from(project(":common").sourceSets.main.allSource)
+    from(sourceSets.bootstrap.allSource)
 }
 
-tasks.withType(ProcessResources).matching(notNeoTask).configureEach {
+tasks.named("processResources", ProcessResources).configure {
     from project(":common").sourceSets.main.resources
+}
+
+def distributionVersion = "${mod_version}-${minecraft_version}"
+def nestedModArtifact = "${mod_id}-neoforge"
+def nestedModFileName = "${project.group}.${nestedModArtifact}-${distributionVersion}-mod.jar"
+def nestedModPath = "META-INF/jarjar/${nestedModFileName}"
+def bootstrapModuleName = "rinku_bootstrap"
+def bootstrapProvider = "de.keksuccino.rinku.platform.bootstrap.RinkuGraphicsBootstrapper"
+def bootstrapServicePath = "META-INF/services/net.neoforged.neoforgespi.earlywindow.GraphicsBootstrapper"
+def bootstrapMetadataFile = layout.buildDirectory.file("generated/rinkuBootstrap/META-INF/jarjar/metadata.json")
+
+def nestedModBaseJar = tasks.named("jar", Jar) {
+    archiveBaseName.set(nestedModArtifact)
+    archiveVersion.set(distributionVersion)
+    archiveClassifier.set("mod-base")
+}
+
+tasks.named("sourcesJar", Jar) {
+    archiveBaseName.set(nestedModArtifact)
+    archiveVersion.set(distributionVersion)
+}
+
+def nestedModJar = tasks.named("jarJar", Jar) {
+    archiveBaseName.set(nestedModArtifact)
+    archiveVersion.set(distributionVersion)
+    archiveClassifier.set("mod")
+}
+
+def generateBootstrapMetadata = tasks.register("generateBootstrapMetadata") {
+    inputs.property("group", project.group.toString())
+    inputs.property("artifact", nestedModArtifact)
+    inputs.property("version", distributionVersion)
+    inputs.property("path", nestedModPath)
+    outputs.file(bootstrapMetadataFile)
+    doLast {
+        def metadataFile = bootstrapMetadataFile.get().asFile
+        metadataFile.parentFile.mkdirs()
+        def metadata = [
+                jars: [[
+                        identifier: [group: project.group.toString(), artifact: nestedModArtifact],
+                        version: [range: "[${distributionVersion},)", artifactVersion: distributionVersion],
+                        path: nestedModPath,
+                        isObfuscated: false
+                ]]
+        ]
+        metadataFile.setText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(metadata)) + System.lineSeparator(), "UTF-8")
+    }
+}
+
+def bootstrapJar = tasks.register("bootstrapJar", Jar) {
+    dependsOn(nestedModJar, generateBootstrapMetadata, tasks.named("processBootstrapResources"), tasks.named("processResources"))
+    archiveBaseName.set(nestedModArtifact)
+    archiveVersion.set(distributionVersion)
+    archiveClassifier.set("")
+    from(sourceSets.bootstrap.output)
+    from(tasks.named("processResources")) {
+        include "META-INF/neoforge.mods.toml"
+        include "${mod_id}_logo_128x128.png"
+    }
+    from(bootstrapMetadataFile) {
+        into "META-INF/jarjar"
+    }
+    from(nestedModJar.flatMap { it.archiveFile }) {
+        into "META-INF/jarjar"
+        rename { nestedModFileName }
+    }
+    from(rootProject.file("LICENSE")) {
+        rename { "${it}_${mod_name}" }
+    }
+    manifest {
+        attributes([
+                "FMLModType"             : "LIBRARY",
+                "Automatic-Module-Name"  : bootstrapModuleName,
+                "Specification-Title"    : mod_name,
+                "Specification-Vendor"   : mod_authors,
+                "Specification-Version"  : mod_version,
+                "Implementation-Title"   : mod_name,
+                "Implementation-Version" : mod_version,
+                "Implementation-Vendor"  : mod_authors,
+                "Built-On-Java"          : "${System.getProperty('java.vm.version')} (${System.getProperty('java.vm.vendor')})",
+                "Built-On-Minecraft"     : minecraft_version,
+                "java-cef-commit"        : rootProject.jcefCommit
+        ])
+    }
+}
+
+def verifyBootstrapPackaging = tasks.register("verifyBootstrapPackaging") {
+    dependsOn(bootstrapJar, nestedModJar, tasks.named("verifyJcefPackaging"))
+    inputs.file(bootstrapJar.flatMap { it.archiveFile })
+    inputs.file(nestedModJar.flatMap { it.archiveFile })
+    inputs.property("nestedModPath", nestedModPath)
+    inputs.property("distributionVersion", distributionVersion)
+    inputs.property("bootstrapModuleName", bootstrapModuleName)
+    inputs.property("bootstrapProvider", bootstrapProvider)
+    doLast {
+        def wrapperFile = bootstrapJar.get().archiveFile.get().asFile
+        def modFile = nestedModJar.get().archiveFile.get().asFile
+        byte[] nestedBytes
+        Set<String> outerClasses
+        new java.util.jar.JarFile(wrapperFile).withCloseable { wrapper ->
+            def attributes = wrapper.manifest?.mainAttributes
+            if (attributes?.getValue("FMLModType") != "LIBRARY") throw new GradleException("${wrapperFile} is not marked as an FML LIBRARY wrapper.")
+            if (attributes?.getValue("Automatic-Module-Name") != bootstrapModuleName) throw new GradleException("${wrapperFile} has an incorrect automatic module name.")
+            if (attributes?.getValue("java-cef-commit") != rootProject.jcefCommit) throw new GradleException("${wrapperFile} records an incorrect JCEF commit.")
+            if (wrapper.getJarEntry("META-INF/neoforge.mods.toml") == null) throw new GradleException("${wrapperFile} is missing its top-level NeoForge metadata.")
+            if (wrapper.getJarEntry("${mod_id}_logo_128x128.png") == null) throw new GradleException("${wrapperFile} is missing its top-level mod logo.")
+            if (wrapper.getJarEntry("LICENSE_${mod_name}") == null) throw new GradleException("${wrapperFile} is missing the Rinku license.")
+            def serviceEntries = wrapper.entries().findAll { !it.directory && it.name.startsWith("META-INF/services/") }.collect { it.name }.toSet()
+            if (serviceEntries != [bootstrapServicePath].toSet()) throw new GradleException("${wrapperFile} contains unexpected service descriptors: ${serviceEntries}.")
+            def serviceEntry = wrapper.getJarEntry(bootstrapServicePath)
+            if (serviceEntry == null) throw new GradleException("${wrapperFile} is missing ${bootstrapServicePath}.")
+            def providerName = wrapper.getInputStream(serviceEntry).getText("UTF-8").trim()
+            if (providerName != bootstrapProvider) throw new GradleException("${wrapperFile} declares unexpected graphics bootstrap provider ${providerName}.")
+            outerClasses = wrapper.entries().findAll { !it.directory && it.name.endsWith(".class") }.collect { it.name }.toSet()
+            def expectedOuterClasses = [
+                    "de/keksuccino/rinku/platform/bootstrap/AwtHeadlessBootstrap.class",
+                    "de/keksuccino/rinku/platform/bootstrap/RinkuGraphicsBootstrapper.class"
+            ].toSet()
+            if (outerClasses != expectedOuterClasses) throw new GradleException("${wrapperFile} contains unexpected outer classes: expected ${expectedOuterClasses}, found ${outerClasses}.")
+            if (wrapper.getJarEntry("de/keksuccino/rinku/Rinku.class") != null) throw new GradleException("${wrapperFile} incorrectly places normal mod classes at the wrapper root.")
+            if (wrapper.entries().any { !it.directory && it.name.startsWith("org/cef/") }) throw new GradleException("${wrapperFile} incorrectly places JCEF classes at the wrapper root.")
+            def metadataEntry = wrapper.getJarEntry("META-INF/jarjar/metadata.json")
+            if (metadataEntry == null) throw new GradleException("${wrapperFile} is missing JarJar metadata.")
+            def metadata = new groovy.json.JsonSlurper().parse(wrapper.getInputStream(metadataEntry))
+            if (!(metadata?.jars instanceof List) || metadata.jars.size() != 1) throw new GradleException("${wrapperFile} must describe exactly one nested Rinku mod JAR.")
+            def nestedMetadata = metadata.jars.first()
+            if (nestedMetadata?.identifier?.group != project.group.toString() || nestedMetadata?.identifier?.artifact != nestedModArtifact) throw new GradleException("${wrapperFile} contains incorrect nested-mod coordinates.")
+            if (nestedMetadata?.version?.range != "[${distributionVersion},)" || nestedMetadata?.version?.artifactVersion != distributionVersion) throw new GradleException("${wrapperFile} contains incorrect nested-mod version metadata.")
+            if (nestedMetadata?.path != nestedModPath || nestedMetadata?.isObfuscated != false) throw new GradleException("${wrapperFile} contains incorrect nested-mod path or obfuscation metadata.")
+            def nestedJarEntries = wrapper.entries().findAll { !it.directory && it.name.startsWith("META-INF/jarjar/") && it.name.endsWith(".jar") }.collect { it.name }
+            if (nestedJarEntries != [nestedModPath]) throw new GradleException("${wrapperFile} must contain exactly the declared nested mod JAR; found ${nestedJarEntries}.")
+            def nestedEntry = wrapper.getJarEntry(nestedModPath)
+            if (nestedEntry == null) throw new GradleException("${wrapperFile} is missing ${nestedModPath}.")
+            nestedBytes = wrapper.getInputStream(nestedEntry).readAllBytes()
+        }
+        if (!java.util.Arrays.equals(nestedBytes, modFile.bytes)) throw new GradleException("${wrapperFile} does not embed the exact verified ${modFile.name} bytes.")
+        def extractedMod = new File(temporaryDir, nestedModFileName)
+        extractedMod.parentFile.mkdirs()
+        extractedMod.bytes = nestedBytes
+        try {
+            new java.util.jar.JarFile(extractedMod).withCloseable { mod ->
+                if (mod.manifest?.mainAttributes?.getValue("FMLModType") == "LIBRARY") throw new GradleException("The nested Rinku mod is incorrectly marked as an FML library.")
+                if (mod.manifest?.mainAttributes?.getValue("java-cef-commit") != rootProject.jcefCommit) throw new GradleException("The nested Rinku mod records an incorrect JCEF commit.")
+                if (mod.getJarEntry("META-INF/neoforge.mods.toml") == null) throw new GradleException("The nested Rinku mod is missing META-INF/neoforge.mods.toml.")
+                if (mod.getJarEntry("de/keksuccino/rinku/Rinku.class") == null) throw new GradleException("The nested Rinku mod is missing its main class.")
+                if (mod.getJarEntry("de/keksuccino/rinku/RinkuNeoForge.class") == null) throw new GradleException("The nested Rinku mod is missing its NeoForge entrypoint.")
+                if (mod.getJarEntry("rinku.mixins.json") == null || mod.getJarEntry("rinku.neoforge.mixins.json") == null) throw new GradleException("The nested Rinku mod is missing one or more Mixin configurations.")
+                if (mod.getJarEntry("META-INF/services/de.keksuccino.rinku.platform.services.IPlatformHelper") == null) throw new GradleException("The nested Rinku mod is missing its platform-helper service descriptor.")
+                if (mod.getJarEntry("META-INF/services/de.keksuccino.rinku.platform.services.IPlatformCompatibilityLayer") == null) throw new GradleException("The nested Rinku mod is missing its compatibility-layer service descriptor.")
+                if (mod.getJarEntry("org/cef/CefApp.class") == null) throw new GradleException("The nested Rinku mod is missing flat-merged JCEF classes.")
+                if (mod.getJarEntry("META-INF/licenses/jcef/LICENSE.txt") == null) throw new GradleException("The nested Rinku mod is missing the JCEF license.")
+                if (mod.getJarEntry(bootstrapServicePath) != null) throw new GradleException("The nested Rinku mod must not identify itself as an early-service JAR.")
+                def outerPackages = outerClasses.findAll { it.contains('/') }.collect { className -> className.substring(0, className.lastIndexOf('/')) }.toSet()
+                def nestedPackages = mod.entries().findAll { !it.directory && it.name.endsWith(".class") && it.name.contains('/') }.collect { classEntry -> classEntry.name.substring(0, classEntry.name.lastIndexOf('/')) }.toSet()
+                def splitPackages = outerPackages.intersect(nestedPackages)
+                if (!splitPackages.isEmpty()) throw new GradleException("The bootstrap wrapper and nested mod contain split packages: ${splitPackages}.")
+            }
+        } finally {
+            java.nio.file.Files.deleteIfExists(extractedMod.toPath())
+        }
+    }
+}
+
+jcefPackagedBinaryArchives.from(nestedModJar.flatMap { it.archiveFile })
+tasks.named("verifyJcefPackaging").configure {
+    dependsOn(nestedModJar)
+}
+
+tasks.named("assemble").configure {
+    dependsOn(bootstrapJar)
+}
+
+def bootstrapTestTask = tasks.register("bootstrapTest", Test) {
+    testClassesDirs = sourceSets.bootstrapTest.output.classesDirs
+    classpath = sourceSets.bootstrapTest.runtimeClasspath
+    useJUnitPlatform()
+}
+
+tasks.named("check").configure {
+    dependsOn(verifyBootstrapPackaging, bootstrapTestTask)
+}
+
+configurations.named("apiElements").configure {
+    outgoing.artifacts.clear()
+    outgoing.artifact(nestedModJar)
+}
+
+configurations.named("runtimeElements").configure {
+    outgoing.artifacts.clear()
+    outgoing.artifact(bootstrapJar)
 }
 
 publishing {
     publications {
         mavenJava(MavenPublication) {
             artifactId "${mod_id}-neoforge"
-            version "${mod_version}-${minecraft_version}"
+            version distributionVersion
             from components.java
             pom.withXml {
                 def deps = asNode().get('dependencies')
@@ -121,10 +319,6 @@ publishing {
             url "file://" + System.getenv("local_maven")
         }
     }
-}
-
-tasks.named("build") {
-    dependsOn("generatePomFileForMavenJavaPublication", "generateMetadataFileForMavenJavaPublication")
 }
 
 tasks.withType(GenerateModuleMetadata).configureEach {
@@ -145,65 +339,9 @@ def stripModuleDepsTask = tasks.register("stripModuleDependencies") {
             json.variants = json.variants.findAll { variant ->
                 !(variant instanceof Map) || variant.name != "accessTransformerElements"
             }
-            def runtimeAllFiles = null
-            def runtimeRenamedFiles = null
             json.variants.each { variant ->
                 if (variant instanceof Map) {
-                    if (variant.name == "runtimeElements" && variant.files instanceof List) {
-                        def allFiles = variant.files.findAll { fileEntry ->
-                            fileEntry instanceof Map &&
-                                    fileEntry.name instanceof String &&
-                                    fileEntry.name.endsWith("-all.jar")
-                        }
-                        if (allFiles != null && !allFiles.isEmpty()) {
-                            runtimeAllFiles = allFiles
-                            runtimeRenamedFiles = allFiles.collect { fileEntry ->
-                                if (fileEntry instanceof Map) {
-                                    def renamed = new LinkedHashMap(fileEntry)
-                                    if (renamed.name instanceof String && renamed.name.endsWith("-all.jar")) {
-                                        renamed.name = renamed.name.replace("-all.jar", ".jar")
-                                    }
-                                    if (renamed.url instanceof String && renamed.url.endsWith("-all.jar")) {
-                                        renamed.url = renamed.url.replace("-all.jar", ".jar")
-                                    }
-                                    renamed
-                                } else {
-                                    fileEntry
-                                }
-                            }
-                            variant.files = runtimeRenamedFiles
-                        }
-                    }
                     variant.remove("dependencies")
-                }
-            }
-            json.variants.each { variant ->
-                if (variant instanceof Map && variant.name == "apiElements") {
-                    if (runtimeRenamedFiles != null) {
-                        variant.files = runtimeRenamedFiles.collect { fileEntry ->
-                            fileEntry instanceof Map ? new LinkedHashMap(fileEntry) : fileEntry
-                        }
-                    } else if (variant.files instanceof List) {
-                        variant.files = variant.files.findAll { fileEntry ->
-                            fileEntry instanceof Map &&
-                                    fileEntry.name instanceof String &&
-                                    fileEntry.name.endsWith("-all.jar")
-                        }
-                        variant.files = variant.files.collect { fileEntry ->
-                            if (fileEntry instanceof Map) {
-                                def renamed = new LinkedHashMap(fileEntry)
-                                if (renamed.name instanceof String && renamed.name.endsWith("-all.jar")) {
-                                    renamed.name = renamed.name.replace("-all.jar", ".jar")
-                                }
-                                if (renamed.url instanceof String && renamed.url.endsWith("-all.jar")) {
-                                    renamed.url = renamed.url.replace("-all.jar", ".jar")
-                                }
-                                renamed
-                            } else {
-                                fileEntry
-                            }
-                        }
-                    }
                 }
             }
         }
@@ -213,4 +351,39 @@ def stripModuleDepsTask = tasks.register("stripModuleDependencies") {
 
 tasks.named("generateMetadataFileForMavenJavaPublication") {
     finalizedBy(stripModuleDepsTask)
+}
+
+def verifyPublicationMetadata = tasks.register("verifyPublicationMetadata") {
+    dependsOn("generatePomFileForMavenJavaPublication", "generateMetadataFileForMavenJavaPublication")
+    mustRunAfter(stripModuleDepsTask)
+    def moduleFile = layout.buildDirectory.file("publications/mavenJava/module.json")
+    def pomFile = layout.buildDirectory.file("publications/mavenJava/pom-default.xml")
+    inputs.files(moduleFile, pomFile)
+    inputs.property("group", project.group.toString())
+    inputs.property("artifact", nestedModArtifact)
+    inputs.property("version", distributionVersion)
+    doLast {
+        def module = new groovy.json.JsonSlurper().parse(moduleFile.get().asFile)
+        if (module?.component?.group != project.group.toString() || module?.component?.module != nestedModArtifact || module?.component?.version != distributionVersion) throw new GradleException("Gradle module metadata contains incorrect Rinku NeoForge coordinates.")
+        def expectedVariantFiles = [
+                apiElements: "${nestedModArtifact}-${distributionVersion}-mod.jar",
+                runtimeElements: "${nestedModArtifact}-${distributionVersion}.jar",
+                sourcesElements: "${nestedModArtifact}-${distributionVersion}-sources.jar"
+        ]
+        def variants = module?.variants instanceof List ? module.variants : []
+        if (variants.collect { it.name }.toSet() != expectedVariantFiles.keySet()) throw new GradleException("Gradle module metadata contains unexpected variants: ${variants.collect { it.name }}.")
+        variants.each { variant ->
+            def expectedFile = expectedVariantFiles[variant.name]
+            if (variant.containsKey("dependencies")) throw new GradleException("Gradle module metadata variant ${variant.name} exposes mapped development dependencies.")
+            if (!(variant.files instanceof List) || variant.files.size() != 1 || variant.files.first()?.name != expectedFile || variant.files.first()?.url != expectedFile) throw new GradleException("Gradle module metadata variant ${variant.name} does not expose exactly ${expectedFile}.")
+        }
+
+        def pom = new groovy.xml.XmlSlurper(false, false).parse(pomFile.get().asFile)
+        if (pom.groupId.text() != project.group.toString() || pom.artifactId.text() != nestedModArtifact || pom.version.text() != distributionVersion) throw new GradleException("The generated POM contains incorrect Rinku NeoForge coordinates.")
+        if (!pom.depthFirst().findAll { it.name() == "dependency" }.isEmpty()) throw new GradleException("The generated POM exposes mapped development dependencies.")
+    }
+}
+
+tasks.named("build") {
+    dependsOn(verifyPublicationMetadata)
 }

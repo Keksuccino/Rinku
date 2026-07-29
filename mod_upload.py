@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 import uuid
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
@@ -689,6 +690,15 @@ def select_mod_jar(
             f"Ignored suffixes: {', '.join(IGNORED_JAR_SUFFIXES)}"
         )
 
+    if loader == "neoforge":
+        wrappers = [path for path in candidates if is_neoforge_bootstrap_wrapper(path)]
+        if len(wrappers) == 1:
+            return SelectedJar(wrappers[0], "found the structurally verified FML bootstrap wrapper")
+        if len(wrappers) > 1:
+            selected = choose_largest(wrappers)
+            confirm_ambiguous_jar(loader, wrappers, selected, assume_yes=assume_yes)
+            return SelectedJar(selected, "selected from multiple FML bootstrap wrappers")
+
     all_jars = [path for path in candidates if path.name.endswith("-all.jar")]
     if all_jars:
         selected = choose_largest(all_jars)
@@ -717,6 +727,28 @@ def select_mod_jar(
     selected = choose_largest(candidates)
     confirm_ambiguous_jar(loader, candidates, selected, assume_yes=assume_yes)
     return SelectedJar(selected, "largest candidate accepted after confirmation")
+
+
+def is_neoforge_bootstrap_wrapper(path: Path) -> bool:
+    try:
+        with zipfile.ZipFile(path) as archive:
+            manifest = archive.read("META-INF/MANIFEST.MF").decode("utf-8", errors="replace")
+            entries = set(archive.namelist())
+    except (KeyError, OSError, zipfile.BadZipFile):
+        return False
+
+    manifest_attributes = {
+        line.split(":", 1)[0].strip(): line.split(":", 1)[1].strip()
+        for line in manifest.splitlines()
+        if ":" in line and not line.startswith(" ")
+    }
+    nested_jars = [entry for entry in entries if entry.startswith("META-INF/jarjar/") and entry.endswith(".jar")]
+    return (
+        manifest_attributes.get("FMLModType") == "LIBRARY"
+        and "META-INF/jarjar/metadata.json" in entries
+        and "META-INF/services/net.neoforged.neoforgespi.earlywindow.GraphicsBootstrapper" in entries
+        and len(nested_jars) == 1
+    )
 
 
 def safe_file_component(value: str) -> str:
