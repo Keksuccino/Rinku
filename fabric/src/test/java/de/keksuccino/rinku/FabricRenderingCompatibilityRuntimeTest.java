@@ -35,6 +35,11 @@ class FabricRenderingCompatibilityRuntimeTest {
             String source = Files.readString(projectDirectory.resolve(relativePath));
             assertFalse(source.contains("rinku.enableSodiumIris"), relativePath + " must not expose a permanent Sodium/Iris launch toggle");
         }
+
+        String readme = Files.readString(projectDirectory.resolve("README.md"));
+        assertFalse(readme.contains("Run the Fabric client"), "README.md must not contain generic Fabric launch instructions");
+        assertFalse(readme.contains("Forge client"), "README.md must not contain generic Forge launch instructions");
+        assertFalse(readme.contains("runClient"), "README.md must not expose generic client launch commands");
     }
 
 }
