@@ -8,6 +8,7 @@ import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.ModList;
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.fml.loading.FMLLoader;
+import net.neoforged.neoforge.client.loading.ClientModLoader;
 import net.neoforged.neoforgespi.language.IModInfo;
 
 import java.util.ArrayList;
@@ -67,6 +68,19 @@ public class NeoForgePlatformHelper implements IPlatformHelper {
     @Override
     public boolean isOnClient() {
         return FMLEnvironment.getDist() == Dist.CLIENT;
+    }
+
+    @Override
+    public boolean requiresClientInitializationDeferral() {
+        return FMLEnvironment.getDist() == Dist.CLIENT;
+    }
+
+    @Override
+    public boolean isClientInitializationCandidateReady() {
+        if (FMLEnvironment.getDist() != Dist.CLIENT) return true;
+        // This is only the first readiness condition. The common frame latch also waits for Minecraft's loading
+        // overlay to disappear and for a complete normal display/event-pump frame before native CEF startup.
+        return !ClientModLoader.isLoading();
     }
 
     @Override

@@ -67,6 +67,16 @@ public class FabricPlatformHelper implements IPlatformHelper {
     }
 
     @Override
+    public boolean requiresClientInitializationDeferral() {
+        return false;
+    }
+
+    @Override
+    public boolean isClientInitializationCandidateReady() {
+        return true;
+    }
+
+    @Override
     public InputConstants.Key getKeyMappingKey(KeyMapping keyMapping) {
         return InputConstants.getKey(keyMapping.saveString());
     }
