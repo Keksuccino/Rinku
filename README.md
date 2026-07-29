@@ -57,8 +57,6 @@ The build resolves the JCEF Java binary and source JARs from the `Keksuccino/jce
 To run the Fabric client: `./gradlew fabricClient`
 To run the NeoForge client: `./gradlew neoforgeClient`
 
-Fabric development runs include Sodium and Iris by default so rendering compatibility is exercised during normal testing. Pass `-Prinku.enableRenderCompatibilityMods=false` to run without them.
-
 In-game, there is a demo browser if you press F12 after you're loaded into a world (the demo browser only exists when you're running from a development environment).
 
 ### JCEF runtime cache and checksum trust
