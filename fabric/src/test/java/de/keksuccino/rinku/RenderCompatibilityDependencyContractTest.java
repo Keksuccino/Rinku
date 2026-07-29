@@ -37,5 +37,7 @@ class RenderCompatibilityDependencyContractTest {
 
         String readme = Files.readString(projectDirectory.resolve("README.md"));
         assertFalse(readme.contains("rinku.enableRenderCompatibilityMods"));
+        assertFalse(readme.contains("To run the Fabric client:"));
+        assertFalse(readme.contains("To run the NeoForge client:"));
     }
 }
