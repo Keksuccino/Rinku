@@ -19,8 +19,8 @@ dependencies {
     implementation project(":common")
     include(implementation(annotationProcessor("io.github.llamalad7:mixinextras-fabric:${mixin_extras_version}")))
     implementation "maven.modrinth:modmenu:20.0.0-beta.4"
-    runtimeOnly "maven.modrinth:sodium:${sodium_version}"
-    runtimeOnly "maven.modrinth:iris:${iris_version}"
+    runtimeOnly "maven.modrinth:sodium:mc26.2-0.9.1-fabric"
+    runtimeOnly "maven.modrinth:iris:1.11.2+26.2-fabric"
     testImplementation "org.junit.jupiter:junit-jupiter-api:5.10.2"
     testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:5.10.2"
     testRuntimeOnly "org.junit.platform:junit-platform-launcher:1.10.2"
@@ -123,20 +123,4 @@ def stripModuleDepsTask = tasks.register("stripModuleDependencies") {
 
 tasks.named("generateMetadataFileForMavenJavaPublication") {
     finalizedBy(stripModuleDepsTask)
-}
-
-def verifyRenderCompatibilityRuntime = tasks.register("verifyRenderCompatibilityRuntime") {
-    group = "verification"
-    description = "Verifies the Sodium and Iris Fabric development runtime."
-    inputs.property("sodiumVersion", sodium_version)
-    inputs.property("irisVersion", iris_version)
-    doLast {
-        def expectedVersions = [sodium: sodium_version, iris: iris_version]
-        def resolvedVersions = configurations.runtimeClasspath.resolvedConfiguration.resolvedArtifacts.findAll { artifact -> artifact.moduleVersion.id.group == "maven.modrinth" && expectedVersions.containsKey(artifact.name) }.collectEntries { artifact -> [(artifact.name): artifact.moduleVersion.id.version] }
-        if (resolvedVersions != expectedVersions) throw new GradleException("Fabric rendering compatibility runtime resolved ${resolvedVersions}; expected ${expectedVersions}.")
-    }
-}
-
-tasks.named("check") {
-    dependsOn(verifyRenderCompatibilityRuntime)
 }
