@@ -84,6 +84,11 @@ dependencies {
 }
 
 configurations {
+    minecraftLibrary {
+        // ModLauncher does not expose arbitrary JavaExec classpath entries to transformed game classes. ForgeGradle's
+        // minecraftLibrary token adds JCEF to the legacy module-layer classpath where Mixins and Rinku can load it.
+        extendsFrom(configurations.jcefApi)
+    }
     runtimeClasspath { exclude group: 'net.fabricmc', module: 'fabric-loader' }
     developmentRuntimeClasspath { exclude group: 'net.fabricmc', module: 'fabric-loader' }
 }
@@ -128,6 +133,9 @@ jcefPackagedBinaryArchives.from(finalJarJar.flatMap { it.archiveFile })
 tasks.named("verifyJcefPackaging").configure {
     // Validate the post-obfuscation file that is actually uploaded, not ForgeGradle's intermediate jarJar output.
     dependsOn(tasks.named("reobfJarJar"))
+    doLast {
+        if (!configurations.minecraftLibrary.files.contains(jcefBinaryConfiguration.get().singleFile)) throw new GradleException("Forge's ModLauncher library classpath does not contain the pinned JCEF API.")
+    }
 }
 
 publishing {
