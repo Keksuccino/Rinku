@@ -41,6 +41,12 @@ public interface IPlatformHelper {
     /** If the mod is loaded client-side. **/
     boolean isOnClient();
 
+    /** Whether this loader needs Rinku to wait for a stable post-loading frame before starting native UI resources. */
+    boolean requiresClientInitializationDeferral();
+
+    /** Whether loader-managed startup has reached the candidate-ready state used by the shared frame latch. */
+    boolean isClientInitializationCandidateReady();
+
     /** Get the key of a {@link KeyMapping}. **/
     InputConstants.Key getKeyMappingKey(KeyMapping keyMapping);
 
