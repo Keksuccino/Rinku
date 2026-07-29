@@ -1,0 +1,125 @@
+
+plugins {
+    id 'java'
+    id 'idea'
+    id 'maven-publish'
+    id "fabric-loom" version "$fabric_loom_version"
+}
+
+base {
+    archivesName = "${mod_id}"
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${minecraft_version}"
+    mappings loom.layered() {
+        officialMojangMappings()
+        parchment("org.parchmentmc.data:parchment-${parchment_mc_version}:${parchment_version}@zip")
+    }
+    compileOnly "net.fabricmc:fabric-loader:${fabric_loader_version}"
+    implementation group: 'com.google.code.findbugs', name: 'jsr305', version: '3.0.2'
+    implementation group: 'org.ow2.asm', name: 'asm-tree', version: '9.7'
+    annotationProcessor group: 'org.ow2.asm', name: 'asm-util', version: '9.7'
+    compileOnly(annotationProcessor("io.github.llamalad7:mixinextras-common:${mixin_extras_version}"))
+    compileOnly group:'org.spongepowered', name:'mixin', version:'0.8.5'
+    testImplementation "org.junit.jupiter:junit-jupiter-api:5.10.2"
+    testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:5.10.2"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher:1.10.2"
+}
+
+loom {
+    mixin {
+        useLegacyMixinAp = true
+        defaultRefmapName.set("${mod_id}.refmap.json")
+    }
+}
+
+def generatedJcefIdentityDirectory = layout.buildDirectory.dir("generated/sources/jcefIdentity/java/main")
+def generatedJcefIdentitySourceFile = generatedJcefIdentityDirectory.map { it.file("de/keksuccino/rinku/JcefRuntimeIdentity.java") }
+def generateJcefRuntimeIdentity = tasks.register("generateJcefRuntimeIdentity") {
+    inputs.property("jcefCommit", rootProject.jcefCommit)
+    outputs.dir(generatedJcefIdentityDirectory)
+    doLast {
+        def sourceFile = generatedJcefIdentitySourceFile.get().asFile
+        def action = sourceFile.isFile() ? "Regenerated" : "Generated"
+        sourceFile.parentFile.mkdirs()
+        sourceFile.setText("""package de.keksuccino.rinku;
+
+/** Build-generated identity binding the Java API and downloaded native runtime to one JCEF release. */
+public final class JcefRuntimeIdentity {
+
+    public static final String JAVA_CEF_COMMIT = \"${rootProject.jcefCommit}\";
+
+    private JcefRuntimeIdentity() {}
+
+}
+""", "UTF-8")
+        logger.lifecycle("${action} JCEF runtime identity at ${project.relativePath(sourceFile)} for commit ${rootProject.jcefCommit}.")
+    }
+}
+
+def reportJcefRuntimeIdentityState = tasks.register("reportJcefRuntimeIdentityState") {
+    doLast {
+        if (!generateJcefRuntimeIdentity.get().state.upToDate) return
+        def sourceFile = generatedJcefIdentitySourceFile.get().asFile
+        logger.lifecycle("JCEF runtime identity is up-to-date at ${project.relativePath(sourceFile)} for commit ${rootProject.jcefCommit}.")
+    }
+}
+
+generateJcefRuntimeIdentity.configure {
+    finalizedBy(reportJcefRuntimeIdentityState)
+}
+
+sourceSets.main.java.srcDir(generatedJcefIdentityDirectory)
+idea.module.generatedSourceDirs.add(generatedJcefIdentityDirectory.get().asFile)
+// The after-sync trigger also bootstraps clean first imports, where IntelliJ cannot know about a
+// newly declared before-sync trigger until the updated Gradle model has already been imported.
+rootProject.idea.project.settings.taskTriggers.afterSync(generateJcefRuntimeIdentity)
+
+tasks.named("ideaModule").configure {
+    dependsOn(generateJcefRuntimeIdentity)
+}
+
+def verifyJcefRuntimeIdentityIdeIntegration = tasks.register("verifyJcefRuntimeIdentityIdeIntegration") {
+    group = "verification"
+    description = "Verifies that IntelliJ generates and indexes the build-pinned JCEF identity."
+    doLast {
+        def generatedDirectory = generatedJcefIdentityDirectory.get().asFile
+        if (!sourceSets.main.java.srcDirs.contains(generatedDirectory)) throw new GradleException("The JCEF identity directory is not a main Java source directory: ${generatedDirectory}")
+        if (!idea.module.generatedSourceDirs.contains(generatedDirectory)) throw new GradleException("The JCEF identity directory is not marked as generated for IntelliJ: ${generatedDirectory}")
+
+        def afterSyncTasks = rootProject.idea.project.settings.taskTriggers.toMap().get("afterSync") ?: []
+        def expectedProjectPath = project.projectDir.path.replaceAll("\\\\", "/")
+        if (!afterSyncTasks.any { it.taskPath == generateJcefRuntimeIdentity.get().name && it.projectPath == expectedProjectPath }) throw new GradleException("The JCEF identity generator is not registered as an IntelliJ after-sync task.")
+    }
+}
+
+tasks.named("check").configure {
+    dependsOn(verifyJcefRuntimeIdentityIdeIntegration)
+}
+
+tasks.named("compileJava", JavaCompile).configure {
+    dependsOn(generateJcefRuntimeIdentity)
+}
+
+tasks.named("sourcesJar", Jar).configure {
+    dependsOn(generateJcefRuntimeIdentity)
+}
+
+tasks.named("test", Test).configure {
+    useJUnitPlatform()
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            artifactId base.archivesName.get()
+            from components.java
+        }
+    }
+    repositories {
+        maven {
+            url "file://" + System.getenv("local_maven")
+        }
+    }
+}
