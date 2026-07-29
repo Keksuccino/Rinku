@@ -1,0 +1,188 @@
+plugins {
+    id 'idea'
+    id 'maven-publish'
+    id 'net.minecraftforge.gradle' version '[6.0.24,6.2)'
+    id 'org.parchmentmc.librarian.forgegradle' version '1.+'
+    id 'org.spongepowered.mixin' version '0.7-SNAPSHOT'
+    id 'java-library'
+}
+
+base {
+    archivesName = "${mod_id}"
+}
+
+mixin {
+    add(sourceSets.main, "${mod_id}.refmap.json")
+    config("${mod_id}.mixins.json")
+    config("${mod_id}.forge.mixins.json")
+}
+
+jarJar.enable()
+
+def forgeMappingsChannel = providers.gradleProperty("forge_mappings_channel").map { it.trim().toLowerCase(java.util.Locale.ROOT) }.orElse("parchment").get()
+def supportedForgeMappings = ['official', 'stable', 'snapshot', 'stable_nodoc', 'snapshot_nodoc', 'parchment']
+if (!(forgeMappingsChannel in supportedForgeMappings)) {
+    throw new GradleException("Unsupported ForgeGradle 6 mapping channel '${forgeMappingsChannel}'. Supported channels: ${supportedForgeMappings}.")
+}
+def defaultParchmentMappingsVersion = parchment_mc_version == minecraft_version ? "${parchment_version}-${minecraft_version}" : "${parchment_mc_version}-${parchment_version}-${minecraft_version}"
+def forgeMappingsVersion = providers.gradleProperty("forge_mappings_version").orElse(forgeMappingsChannel == "parchment" ? defaultParchmentMappingsVersion : "${minecraft_version}").get()
+
+minecraft {
+    mappings channel: forgeMappingsChannel, version: forgeMappingsVersion
+    copyIdeResources = true
+
+    if (file('src/main/resources/META-INF/accesstransformer.cfg').exists()) {
+        accessTransformer = file('src/main/resources/META-INF/accesstransformer.cfg')
+    }
+
+    runs {
+        client {
+            workingDirectory project.file('../run_client')
+            ideaModule "${rootProject.name}.${project.name}.main"
+            taskName 'Client'
+            property 'mixin.env.remapRefMap', 'true'
+            property 'mixin.env.refMapRemappingFile', "${projectDir}/build/createSrgToMcp/output.srg"
+            mods {
+                rinku {
+                    source sourceSets.main
+                }
+            }
+        }
+        server {
+            workingDirectory project.file('../run_server')
+            ideaModule "${rootProject.name}.${project.name}.main"
+            taskName 'Server'
+            property 'mixin.env.remapRefMap', 'true'
+            property 'mixin.env.refMapRemappingFile', "${projectDir}/build/createSrgToMcp/output.srg"
+            args '--nogui'
+            mods {
+                rinku {
+                    source sourceSets.main
+                }
+            }
+        }
+    }
+}
+
+test {
+    exclude '**/*'
+}
+
+sourceSets.main.resources.srcDir 'src/generated/resources'
+
+dependencies {
+    testImplementation "org.junit.jupiter:junit-jupiter-api:5.10.2"
+    testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:5.10.2"
+    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+    implementation('net.sf.jopt-simple:jopt-simple:5.0.4') { version { strictly '5.0.4' } }
+    annotationProcessor "org.spongepowered:mixin:0.8.5-SNAPSHOT:processor"
+    implementation(annotationProcessor("io.github.llamalad7:mixinextras-common:${mixin_extras_version}"))
+    implementation(jarJar("io.github.llamalad7:mixinextras-forge:${mixin_extras_version}")) {
+        jarJar.ranged(it, "[${mixin_extras_version},)")
+    }
+    compileOnly project(":common")
+}
+
+configurations {
+    runtimeClasspath { exclude group: 'net.fabricmc', module: 'fabric-loader' }
+    developmentRuntimeClasspath { exclude group: 'net.fabricmc', module: 'fabric-loader' }
+}
+
+tasks.named("compileJava", JavaCompile).configure {
+    source(project(":common").sourceSets.main.allSource)
+    dependsOn(project(":common").tasks.named("generateJcefRuntimeIdentity"))
+}
+
+tasks.withType(Javadoc).configureEach {
+    source(project(":common").sourceSets.main.allJava)
+}
+
+tasks.named("sourcesJar", Jar) {
+    dependsOn(project(":common").tasks.named("generateJcefRuntimeIdentity"))
+    from(project(":common").sourceSets.main.allSource)
+}
+
+processResources {
+    from project(":common").sourceSets.main.resources
+}
+
+jar.finalizedBy('reobfJar')
+
+def finalJarJar = tasks.named("jarJar", Jar)
+def jcefBinaryConfiguration = configurations.named("jcefBinary")
+finalJarJar.configure { Jar archiveTask ->
+    // ForgeGradle rebuilds jarJar from the source set instead of using the normal jar as its base.
+    // Re-add the flat JCEF payload here so the distributable -all artifact matches every other loader jar.
+    archiveTask.from({ zipTree(jcefBinaryConfiguration.get().singleFile) }) {
+        include 'org/cef/**'
+    }
+    archiveTask.from(rootProject.file("LICENSE")) {
+        rename { "${it}_${mod_name}" }
+    }
+    archiveTask.from(rootProject.file("licenses/JCEF-LICENSE.txt")) {
+        into "META-INF/licenses/jcef"
+        rename { "LICENSE.txt" }
+    }
+}
+jcefPackagedBinaryArchives.from(finalJarJar.flatMap { it.archiveFile })
+tasks.named("verifyJcefPackaging").configure {
+    // Validate the post-obfuscation file that is actually uploaded, not ForgeGradle's intermediate jarJar output.
+    dependsOn(tasks.named("reobfJarJar"))
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            artifactId "${mod_id}-forge"
+            version "${mod_version}-${minecraft_version}"
+            from components.java
+            fg.component(it)
+            pom.withXml {
+                def deps = asNode().get('dependencies')
+                if (deps instanceof List) {
+                    deps.each { asNode().remove(it) }
+                }
+            }
+        }
+    }
+    repositories {
+        maven {
+            url "file://" + System.getenv("local_maven")
+        }
+    }
+}
+
+tasks.named("build") {
+    dependsOn("generatePomFileForMavenJavaPublication", "generateMetadataFileForMavenJavaPublication")
+}
+
+tasks.withType(GenerateModuleMetadata).configureEach {
+    enabled = true
+}
+
+def stripModuleDepsTask = tasks.register("stripModuleDependencies") {
+    def moduleFile = layout.buildDirectory.file("publications/mavenJava/module.json")
+    inputs.file(moduleFile)
+    outputs.file(moduleFile)
+    doLast {
+        def file = moduleFile.get().asFile
+        if (!file.exists()) return
+        def json = new groovy.json.JsonSlurper().parse(file)
+        if (json?.variants) {
+            json.variants.each { variant ->
+                if (variant instanceof Map) variant.remove("dependencies")
+            }
+        }
+        file.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(json))
+    }
+}
+
+tasks.named("generateMetadataFileForMavenJavaPublication") {
+    finalizedBy(stripModuleDepsTask)
+}
+
+jar {
+    manifest {
+        attributes(["MixinConfigs": "${mod_id}.forge.mixins.json,${mod_id}.mixins.json"])
+    }
+}

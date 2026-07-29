@@ -1,0 +1,134 @@
+
+plugins {
+    id 'java'
+    id 'idea'
+    id 'maven-publish'
+    id "fabric-loom" version "$fabric_loom_version"
+}
+
+base {
+    archivesName = "${mod_id}"
+}
+
+dependencies {
+
+    minecraft "com.mojang:minecraft:${minecraft_version}"
+    mappings loom.layered() {
+        officialMojangMappings()
+        parchment("org.parchmentmc.data:parchment-${parchment_mc_version}:${parchment_version}@zip")
+    }
+    modImplementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${fabric_version}"
+    implementation group: 'com.google.code.findbugs', name: 'jsr305', version: '3.0.1'
+    implementation project(":common")
+    include(implementation(annotationProcessor("io.github.llamalad7:mixinextras-fabric:${mixin_extras_version}")))
+    modImplementation "maven.modrinth:modmenu:7.2.2"
+    if (providers.gradleProperty("rinku.disableRenderingCompatMods").orNull != "true") {
+        modLocalRuntime "maven.modrinth:sodium:${sodium_version}"
+        modLocalRuntime "maven.modrinth:iris:${iris_version}"
+    }
+    testImplementation "org.junit.jupiter:junit-jupiter-api:5.10.2"
+    testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:5.10.2"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher:1.10.2"
+
+}
+
+loom {
+    mixin {
+        useLegacyMixinAp = true
+        defaultRefmapName.set("${mod_id}.refmap.json")
+    }
+    mods {
+        "${mod_id}" {
+            sourceSet sourceSets.main
+            sourceSet project(":common").sourceSets.main
+        }
+    }
+    runs {
+        client {
+            client()
+            setConfigName("Fabric Client")
+            ideConfigGenerated(true)
+            runDir("run_client")
+        }
+        server {
+            server()
+            setConfigName("Fabric Server")
+            ideConfigGenerated(true)
+            runDir("run_server")
+        }
+    }
+}
+
+tasks.named("compileJava", JavaCompile).configure {
+    source(project(":common").sourceSets.main.allSource)
+    dependsOn(project(":common").tasks.named("generateJcefRuntimeIdentity"))
+}
+tasks.withType(Javadoc).configureEach {
+    source(project(":common").sourceSets.main.allJava)
+}
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+}
+tasks.named("sourcesJar", Jar) {
+    dependsOn(project(":common").tasks.named("generateJcefRuntimeIdentity"))
+    from(project(":common").sourceSets.main.allSource)
+}
+
+processResources {
+    from project(":common").sourceSets.main.resources
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            artifactId "${mod_id}-fabric"
+            version "${mod_version}-${minecraft_version}"
+            from components.java
+            pom.withXml {
+                def deps = asNode().get('dependencies')
+                if (deps instanceof List) {
+                    deps.each { asNode().remove(it) }
+                }
+            }
+        }
+    }
+    repositories {
+        maven {
+            url "file://" + System.getenv("local_maven")
+        }
+    }
+}
+
+tasks.named("build") {
+    dependsOn("generatePomFileForMavenJavaPublication", "generateMetadataFileForMavenJavaPublication")
+}
+
+tasks.withType(GenerateModuleMetadata).configureEach {
+    enabled = true
+}
+
+def stripModuleDepsTask = tasks.register("stripModuleDependencies") {
+    def moduleFile = layout.buildDirectory.file("publications/mavenJava/module.json")
+    inputs.file(moduleFile)
+    outputs.file(moduleFile)
+    doLast {
+        def file = moduleFile.get().asFile
+        if (!file.exists()) {
+            return
+        }
+        def json = new groovy.json.JsonSlurper().parse(file)
+        if (json?.variants) {
+            json.variants.each { variant ->
+                if (variant instanceof Map) {
+                    variant.remove("dependencies")
+                }
+            }
+        }
+        file.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(json))
+    }
+}
+
+tasks.named("generateMetadataFileForMavenJavaPublication") {
+    finalizedBy(stripModuleDepsTask)
+}

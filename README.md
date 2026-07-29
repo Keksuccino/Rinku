@@ -30,13 +30,13 @@ repositories {
 }
 
 dependencies {
-    modImplementation "de.keksuccino:rinku-fabric:<rinku_version>-<minecraft_version>"
+    modImplementation "de.keksuccino:rinku-fabric:3.0.0-1.20.1"
 }
 ```
 
 Replace the Rinku and Minecraft version as required. `modImplementation` makes Rinku available in dev.
 
-### NeoForge
+### Forge
 
 ```groovy
 repositories {
@@ -44,18 +44,19 @@ repositories {
 }
 
 dependencies {
-    implementation "de.keksuccino:rinku-neoforge:<rinku_version>-<minecraft_version>"
+    implementation fg.deobf("de.keksuccino:rinku-forge:3.0.0-1.20.1")
 }
 ```
 
-NeoForge ships deobfuscated jars by default, so the dependency can be declared with a plain `implementation`. Replace the Rinku and Minecraft version as required.
+ForgeGradle consumers must deobfuscate the dependency with `fg.deobf`. Replace the Rinku and Minecraft version as required.
 
 ## Building & Modifying Rinku
 
-The build resolves the JCEF Java binary and source JARs from the `Keksuccino/jcef-mcef` GitHub release selected by `jcef_commit` in `gradle.properties`; no submodule checkout is required. When updating JCEF, select a lowercase 40-character commit that has a matching `java-cef-<commit>` release containing both `jcef-mcef.jar` and `jcef-mcef-sources.jar`. The same compiled identity selects the matching native runtime release. JCEF classes are flat-merged into Rinku binaries and the upstream source classifier is flat-merged into every Rinku sources JAR, so published metadata needs no transitive JCEF dependency and consumers still receive JCEF sources.
+The build resolves the JCEF Java binary and source JARs from the `Keksuccino/jcef-rinku` GitHub release selected by `jcef_commit` in `gradle.properties`; no submodule checkout is required. When updating JCEF, select a lowercase 40-character commit that has a matching `java-cef-<commit>` release containing both `jcef-rinku.jar` and `jcef-rinku-sources.jar`. The same compiled identity selects the matching native runtime release. JCEF classes are flat-merged into Rinku binaries and the upstream source classifier is flat-merged into every Rinku sources JAR, so published metadata needs no transitive JCEF dependency and consumers still receive JCEF sources.
 
-To run the Fabric client: `./gradlew fabricClient`
-To run the NeoForge client: `./gradlew neoforgeClient`
+To run the Fabric client with the pinned Sodium and Iris compatibility set: `./gradlew :fabric:runClient`
+To run the Fabric client without those optional compatibility mods: `./gradlew :fabric:runClient -Prinku.disableRenderingCompatMods=true`
+To run the Forge client: `./gradlew :forge:Client`
 
 In-game, there is a demo browser if you press F12 after you're loaded into a world (the demo browser only exists when you're running from a development environment).
 
@@ -69,7 +70,7 @@ Each complete installation is published atomically under `<game instance>/rinku-
 
 Rinku skips the downloader screen once it detects that the exact compiled JCEF runtime is complete. Remove the following paths when needed:
 
-- **JCEF runtime installations:** `<game instance>/rinku-libraries`. Development game instances are `<repo>/fabric/run_client` for Fabric and `<repo>/run_client` for NeoForge with the supplied run configurations.
+- **JCEF runtime installations:** `<game instance>/rinku-libraries`. Development game instances are `<repo>/fabric/run_client` for Fabric and `<repo>/run_client` for Forge with the supplied run configurations.
 - **Config overrides:** `<game instance>/config/rinku/rinku.properties` (delete or edit this file if it sets `skip-download=true`).
 - **Persistent browser data:** `%LOCALAPPDATA%\Rinku\cef-cache` on Windows, `~/Library/Application Support/Rinku/cef-cache` on macOS, or `${XDG_DATA_HOME:-~/.local/share}/rinku/cef-cache` on Linux.
 
