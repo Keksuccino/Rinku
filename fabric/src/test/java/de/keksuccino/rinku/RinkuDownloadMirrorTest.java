@@ -11,6 +11,17 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 /** Covers canonical and secret-safe release mirror resolution. */
 class RinkuDownloadMirrorTest {
     @Test
+    void officialMirrorTargetsRenamedJcefRepository() {
+        assertEquals("https://github.com/Keksuccino/jcef-rinku/releases/download", RinkuDownloader.OFFICIAL_MIRROR);
+    }
+
+    @Test
+    void formerRepositoryMirrorNormalizesToRenamedRepository() {
+        assertEquals(RinkuDownloader.OFFICIAL_MIRROR, RinkuDownloader.normalizeOfficialMirror(RinkuDownloader.FORMER_REPOSITORY_OFFICIAL_MIRROR));
+        assertEquals(RinkuDownloader.OFFICIAL_MIRROR, RinkuDownloader.normalizeOfficialMirror("HTTPS://GITHUB.COM/KEKSUCCINO/JCEF-MCEF/RELEASES/DOWNLOAD/"));
+    }
+
+    @Test
     void canonicalMirrorBuildsReleaseAssetsWithoutStringSubstitution() {
         RinkuDownloadMirror mirror = RinkuDownloadMirror.parse("HTTPS://Example.COM:8443/releases/download///");
 
