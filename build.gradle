@@ -47,8 +47,8 @@ subprojects {
     configurations.named("testCompileOnly") {
         extendsFrom(jcefApi)
     }
-    dependencies.add(jcefApi.name, "${jcefReleaseGroup}:jcef-mcef:${jcefCommit}@jar")
-    dependencies.add(jcefSources.name, "${jcefReleaseGroup}:jcef-mcef:${jcefCommit}:sources@jar")
+    dependencies.add(jcefApi.name, "${jcefReleaseGroup}:jcef-rinku:${jcefCommit}@jar")
+    dependencies.add(jcefSources.name, "${jcefReleaseGroup}:jcef-rinku:${jcefCommit}:sources@jar")
 
     def binaryJar = tasks.named('jar', Jar)
     def sourceJar = tasks.named('sourcesJar', Jar)
@@ -122,7 +122,7 @@ subprojects {
                     def entries = archive.entries().findAll { !it.directory }.collect { it.name }.toSet()
                     def missingEntries = upstreamBinaryEntries - entries
                     if (!missingEntries.isEmpty()) throw new GradleException("${archiveFile} is missing ${missingEntries.size()} flat-merged JCEF binary entries, beginning with ${missingEntries.first()}.")
-                    if (entries.any { it == 'jcef-mcef.jar' || it.endsWith('/jcef-mcef.jar') }) throw new GradleException("${archiveFile} contains a nested jcef-mcef.jar instead of flat-merged classes.")
+                    if (entries.any { it == 'jcef-rinku.jar' || it.endsWith('/jcef-rinku.jar') }) throw new GradleException("${archiveFile} contains a nested jcef-rinku.jar instead of flat-merged classes.")
                     def actualCommit = archive.manifest?.mainAttributes?.getValue('java-cef-commit')
                     if (actualCommit != jcefCommit) throw new GradleException("${archiveFile} records java-cef commit ${actualCommit ?: '<missing>'}; expected ${jcefCommit}.")
                     def licenseEntry = archive.getJarEntry('META-INF/licenses/jcef/LICENSE.txt')
@@ -155,7 +155,7 @@ subprojects {
                     name = "Keksuccino JCEF GitHub Releases"
                     url = uri("https://github.com/Keksuccino/jcef-rinku/releases/download")
                     patternLayout {
-                        // GitHub publishes java-cef-<commit>/jcef-mcef[-sources].jar, so the
+                        // GitHub publishes java-cef-<commit>/jcef-rinku[-sources].jar, so the
                         // synthetic organization and revision map directly to the release URL.
                         artifact "[organization]-[revision]/[module](-[classifier]).[ext]"
                     }
