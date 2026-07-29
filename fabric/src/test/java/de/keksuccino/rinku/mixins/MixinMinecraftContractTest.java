@@ -26,7 +26,7 @@ class MixinMinecraftContractTest {
 
     @Test
     void screenInterceptionRunsCancellablyBeforeVanillaChangesScreens() throws Exception {
-        Method hook = MixinMinecraft.class.getDeclaredMethod("before_setScreen_RINKU", Screen.class, CallbackInfo.class);
+        Method hook = MixinMinecraft.class.getDeclaredMethod("before_setScreen_Rinku", Screen.class, CallbackInfo.class);
         Inject injection = hook.getAnnotation(Inject.class);
 
         assertNotNull(injection);
@@ -37,8 +37,8 @@ class MixinMinecraftContractTest {
 
     @Test
     void renderMailboxAndShutdownHooksRemainDirectFrameLifecycleHooks() throws Exception {
-        Method frameHook = MixinMinecraft.class.getDeclaredMethod("before_runTick_RINKU", boolean.class, CallbackInfo.class);
-        Method shutdownHook = MixinMinecraft.class.getDeclaredMethod("before_close_RINKU", CallbackInfo.class);
+        Method frameHook = MixinMinecraft.class.getDeclaredMethod("before_runTick_Rinku", boolean.class, CallbackInfo.class);
+        Method shutdownHook = MixinMinecraft.class.getDeclaredMethod("before_close_Rinku", CallbackInfo.class);
         Inject frameInjection = frameHook.getAnnotation(Inject.class);
         Inject shutdownInjection = shutdownHook.getAnnotation(Inject.class);
 

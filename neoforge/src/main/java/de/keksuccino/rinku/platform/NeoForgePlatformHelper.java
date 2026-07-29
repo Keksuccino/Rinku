@@ -3,6 +3,7 @@ package de.keksuccino.rinku.platform;
 import com.mojang.blaze3d.platform.InputConstants;
 import de.keksuccino.rinku.platform.services.IPlatformHelper;
 import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.ModList;
@@ -67,6 +68,19 @@ public class NeoForgePlatformHelper implements IPlatformHelper {
     @Override
     public boolean isOnClient() {
         return FMLEnvironment.getDist() == Dist.CLIENT;
+    }
+
+    @Override
+    public boolean requiresClientInitializationDeferral() {
+        return FMLEnvironment.getDist() == Dist.CLIENT;
+    }
+
+    @Override
+    public boolean isClientInitializationCandidateReady() {
+        if (FMLEnvironment.getDist() != Dist.CLIENT) return true;
+        // In NeoForge 26.1.2 ClientModLoader.finish() is synchronous and returns inside Minecraft's constructor.
+        // gameLoadFinished becomes true later, after the initial resource reload, so it safely implies loader completion.
+        return Minecraft.getInstance().isGameLoadFinished();
     }
 
     @Override

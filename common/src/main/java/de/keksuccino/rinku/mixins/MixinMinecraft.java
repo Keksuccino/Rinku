@@ -5,6 +5,8 @@ import de.keksuccino.rinku.OSPlatform;
 import de.keksuccino.rinku.RinkuRenderCoordinator;
 import de.keksuccino.rinku.binarydownload.RinkuDownloadListener;
 import de.keksuccino.rinku.binarydownload.RinkuDownloaderScreen;
+import de.keksuccino.rinku.lifecycle.ClientInitializationReadinessController;
+import de.keksuccino.rinku.platform.Services;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.AccessibilityOnboardingScreen;
 import net.minecraft.client.gui.screens.ConnectScreen;
@@ -45,57 +47,31 @@ public abstract class MixinMinecraft {
 
     @Unique private static final Logger LOGGER_RINKU = LogUtils.getLogger();
     @Unique private static final AtomicBoolean RECURSION_DETECTOR_RINKU = new AtomicBoolean(false);
+    @Unique private static final AtomicBoolean INITIALIZATION_SCHEDULED_RINKU = new AtomicBoolean(false);
+    @Unique private static final ClientInitializationReadinessController CLIENT_INITIALIZATION_READINESS_RINKU = new ClientInitializationReadinessController();
     @Unique private static final String JCEF_HELPER_EXECUTABLE_WINDOWS_RINKU = "jcef_helper.exe";
 
     @Inject(method = "setScreen", at = @At("HEAD"), cancellable = true)
-    private void before_setScreen_RINKU(@Nullable Screen screen, CallbackInfo info) {
-        if (!Rinku.isInitializationAllowed()) {
-            return;
-        }
-
-        boolean recursionValue = RECURSION_DETECTOR_RINKU.get();
-        RECURSION_DETECTOR_RINKU.set(true);
-
-        try {
-            if (!shouldHandleScreenChange_RINKU(screen, recursionValue)) {
-                return;
-            }
-
-            if (RinkuDownloadListener.INSTANCE.isDone() && !RinkuDownloadListener.INSTANCE.isFailed()) {
-                LOGGER_RINKU.debug("Rinku already finished downloading, scheduling loading.");
-                Minecraft.getInstance().execute(() -> {
-                    if (!Rinku.isInitializationAllowed()) return;
-                    LOGGER_RINKU.debug("Rinku is attempting to load.");
-                    try {
-                        Thread.sleep(1000);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        LOGGER_RINKU.warn("Interrupted while waiting to initialize Rinku.", e);
-                        return;
-                    }
-                    if (Rinku.isInitializationAllowed()) Rinku.initialize();
-                });
-            } else if (!RinkuDownloadListener.INSTANCE.isDone() && !RinkuDownloadListener.INSTANCE.isFailed()) {
-                LOGGER_RINKU.debug("Rinku has not finished loading, displaying loading screen.");
-                setScreen(new RinkuDownloaderScreen(screen));
-                info.cancel();
-            } else if (RinkuDownloadListener.INSTANCE.isFailed()) {
-                LOGGER_RINKU.error("Rinku failed to initialize!");
-            }
-        } finally {
-            RECURSION_DETECTOR_RINKU.set(recursionValue);
-        }
+    private void before_setScreen_Rinku(@Nullable Screen screen, CallbackInfo info) {
+        if (!Rinku.isInitializationAllowed()) return;
+        if (CLIENT_INITIALIZATION_READINESS_RINKU.shouldDeferInitialization(Services.PLATFORM.requiresClientInitializationDeferral())) return;
+        if (handleScreenChangeWithRecursion_Rinku(screen)) info.cancel();
     }
 
     // Keep this as a direct frame hook: Minecraft may discard queued executor tasks during shutdown.
     @Inject(method = "runTick", at = @At("HEAD"))
-    private void before_runTick_RINKU(boolean advanceGameTime, CallbackInfo info) {
+    private void before_runTick_Rinku(boolean advanceGameTime, CallbackInfo info) {
         RinkuRenderCoordinator.pumpOnRenderThread();
+        Minecraft minecraft = (Minecraft) (Object) this;
+        boolean requiresDeferral = Services.PLATFORM.requiresClientInitializationDeferral();
+        boolean stableCandidate = Services.PLATFORM.isClientInitializationCandidateReady() && minecraft.isGameLoadFinished() && minecraft.getOverlay() == null && minecraft.screen != null;
+        boolean retryInitialization = CLIENT_INITIALIZATION_READINESS_RINKU.observeTick(requiresDeferral, stableCandidate);
+        if (retryInitialization && Rinku.isInitializationAllowed()) handleScreenChangeWithRecursion_Rinku(minecraft.screen);
     }
 
     // Drain and close browser GPU resources before vanilla tears down the render device and GL context.
     @Inject(method = "close", at = @At("HEAD"))
-    private void before_close_RINKU(CallbackInfo info) {
+    private void before_close_Rinku(CallbackInfo info) {
         RinkuRenderCoordinator.shutdownOnRenderThread();
         Rinku.shutdown();
     }
@@ -105,13 +81,13 @@ public abstract class MixinMinecraft {
      * @author Blobanium
      */
     @Inject(method = "close", at = @At("TAIL"))
-    public void after_close_RINKU(CallbackInfo info) {
+    private void after_close_Rinku(CallbackInfo info) {
 
         if (!OSPlatform.getPlatform().isWindows()) {
             return;
         }
 
-        Path rinkuLibrariesPath = resolveRinkuLibrariesPath_RINKU();
+        Path rinkuLibrariesPath = resolveRinkuLibrariesPath_Rinku();
         if (rinkuLibrariesPath == null) {
             LOGGER_RINKU.warn("rinku.libraries.path is not set, skipping scoped JCEF helper cleanup.");
             return;
@@ -121,11 +97,11 @@ public abstract class MixinMinecraft {
         try {
             ProcessHandle.allProcesses().forEach(processHandle -> {
                 try {
-                    if (!shouldTerminateJcefHelper_RINKU(processHandle, rinkuLibrariesPath)) {
+                    if (!shouldTerminateJcefHelper_Rinku(processHandle, rinkuLibrariesPath)) {
                         return;
                     }
 
-                    if (terminateProcess_RINKU(processHandle)) {
+                    if (terminateProcess_Rinku(processHandle)) {
                         terminatedProcesses.incrementAndGet();
                         LOGGER_RINKU.warn("Terminated lingering JCEF helper process (pid={}).", processHandle.pid());
                     }
@@ -146,7 +122,45 @@ public abstract class MixinMinecraft {
     }
 
     @Unique
-    private static boolean shouldHandleScreenChange_RINKU(@Nullable Screen screen, boolean recursionValue) {
+    private boolean handleScreenChangeWithRecursion_Rinku(@Nullable Screen screen) {
+        boolean recursionValue = RECURSION_DETECTOR_RINKU.get();
+        RECURSION_DETECTOR_RINKU.set(true);
+        try {
+            return handleScreenChange_Rinku(screen, recursionValue);
+        } finally {
+            RECURSION_DETECTOR_RINKU.set(recursionValue);
+        }
+    }
+
+    @Unique
+    private boolean handleScreenChange_Rinku(@Nullable Screen screen, boolean recursionValue) {
+        if (!Rinku.isInitializationAllowed() || !shouldHandleScreenChange_Rinku(screen, recursionValue)) return false;
+        if (RinkuDownloadListener.INSTANCE.isDone() && !RinkuDownloadListener.INSTANCE.isFailed()) {
+            scheduleInitialization_Rinku();
+            return false;
+        }
+        if (!RinkuDownloadListener.INSTANCE.isDone() && !RinkuDownloadListener.INSTANCE.isFailed()) {
+            LOGGER_RINKU.debug("Rinku has not finished loading, displaying loading screen.");
+            this.setScreen(new RinkuDownloaderScreen(screen));
+            return true;
+        }
+        LOGGER_RINKU.error("Rinku failed to initialize!");
+        return false;
+    }
+
+    @Unique
+    private static void scheduleInitialization_Rinku() {
+        if (!INITIALIZATION_SCHEDULED_RINKU.compareAndSet(false, true)) return;
+        LOGGER_RINKU.debug("Rinku finished downloading; scheduling one initialization attempt.");
+        Minecraft.getInstance().execute(() -> {
+            if (!Rinku.isInitializationAllowed()) return;
+            LOGGER_RINKU.debug("Rinku is attempting to load after the client readiness gate.");
+            Rinku.initialize();
+        });
+    }
+
+    @Unique
+    private static boolean shouldHandleScreenChange_Rinku(@Nullable Screen screen, boolean recursionValue) {
         // Mods may try to open screens before the first screen exists. Only known startup and joining screens may
         // replace the downloader recursively; allowing arbitrary recursive replacement can overflow setScreen.
         return !recursionValue
@@ -167,26 +181,26 @@ public abstract class MixinMinecraft {
     }
 
     @Unique
-    private static boolean shouldTerminateJcefHelper_RINKU(ProcessHandle processHandle, Path rinkuLibrariesPath) {
+    private static boolean shouldTerminateJcefHelper_Rinku(ProcessHandle processHandle, Path rinkuLibrariesPath) {
         if (!processHandle.isAlive() || processHandle.pid() == ProcessHandle.current().pid()) {
             return false;
         }
 
-        if (!isJcefHelperProcess_RINKU(processHandle)) {
+        if (!isJcefHelperProcess_Rinku(processHandle)) {
             return false;
         }
 
-        if (isExecutableInRinkuLibraries_RINKU(processHandle, rinkuLibrariesPath)) {
+        if (isExecutableInRinkuLibraries_Rinku(processHandle, rinkuLibrariesPath)) {
             return true;
         }
 
         // Fallback for environments where executable path is unavailable.
-        return isDescendantOfCurrentProcess_RINKU(processHandle)
-                && commandLineContainsLibrariesPath_RINKU(processHandle, rinkuLibrariesPath);
+        return isDescendantOfCurrentProcess_Rinku(processHandle)
+                && commandLineContainsLibrariesPath_Rinku(processHandle, rinkuLibrariesPath);
     }
 
     @Unique
-    private static boolean terminateProcess_RINKU(ProcessHandle processHandle) {
+    private static boolean terminateProcess_Rinku(ProcessHandle processHandle) {
         if (!processHandle.isAlive()) {
             return false;
         }
@@ -199,8 +213,8 @@ public abstract class MixinMinecraft {
     }
 
     @Unique
-    private static boolean isJcefHelperProcess_RINKU(ProcessHandle processHandle) {
-        if (processHandle.info().command().map(MixinMinecraft::isJcefHelperExecutableName_RINKU).orElse(false)) {
+    private static boolean isJcefHelperProcess_Rinku(ProcessHandle processHandle) {
+        if (processHandle.info().command().map(MixinMinecraft::isJcefHelperExecutableName_Rinku).orElse(false)) {
             return true;
         }
 
@@ -210,14 +224,14 @@ public abstract class MixinMinecraft {
     }
 
     @Unique
-    private static boolean isJcefHelperExecutableName_RINKU(String command) {
+    private static boolean isJcefHelperExecutableName_Rinku(String command) {
         int lastSeparatorIndex = Math.max(command.lastIndexOf('/'), command.lastIndexOf('\\'));
         String executableName = lastSeparatorIndex >= 0 ? command.substring(lastSeparatorIndex + 1) : command;
         return executableName.equalsIgnoreCase(JCEF_HELPER_EXECUTABLE_WINDOWS_RINKU);
     }
 
     @Unique
-    private static boolean isExecutableInRinkuLibraries_RINKU(ProcessHandle processHandle, Path rinkuLibrariesPath) {
+    private static boolean isExecutableInRinkuLibraries_Rinku(ProcessHandle processHandle, Path rinkuLibrariesPath) {
         Optional<String> command = processHandle.info().command();
         if (command.isEmpty()) {
             return false;
@@ -235,7 +249,7 @@ public abstract class MixinMinecraft {
     }
 
     @Unique
-    private static boolean commandLineContainsLibrariesPath_RINKU(ProcessHandle processHandle, Path rinkuLibrariesPath) {
+    private static boolean commandLineContainsLibrariesPath_Rinku(ProcessHandle processHandle, Path rinkuLibrariesPath) {
         String librariesPath = rinkuLibrariesPath.toString().toLowerCase(Locale.ROOT);
         return processHandle.info().commandLine()
                 .map(commandLine -> commandLine.toLowerCase(Locale.ROOT).contains(librariesPath))
@@ -243,7 +257,7 @@ public abstract class MixinMinecraft {
     }
 
     @Unique
-    private static boolean isDescendantOfCurrentProcess_RINKU(ProcessHandle processHandle) {
+    private static boolean isDescendantOfCurrentProcess_Rinku(ProcessHandle processHandle) {
         long currentPid = ProcessHandle.current().pid();
 
         Optional<ProcessHandle> currentParent = processHandle.parent();
@@ -259,7 +273,7 @@ public abstract class MixinMinecraft {
     }
 
     @Unique
-    private static @Nullable Path resolveRinkuLibrariesPath_RINKU() {
+    private static @Nullable Path resolveRinkuLibrariesPath_Rinku() {
         String configuredPath = System.getProperty("rinku.libraries.path");
         if (configuredPath == null || configuredPath.isBlank()) {
             return null;
