@@ -103,6 +103,7 @@ public final class CefUtil {
         RinkuSettings settings = Rinku.getSettings();
         ArrayList<String> cefSwitchesList = new ArrayList<>();
         cefSwitchesList.add("--autoplay-policy=no-user-gesture-required");
+        cefSwitchesList.add("--disable-features=ImmersiveReadAnything");
         if (settings.isDisableWebSecurity()) {
             cefSwitchesList.add("--disable-web-security");
         }

@@ -34,7 +34,7 @@ class RinkuMetadataPackageTest {
         String mixinMetadata = readResource("rinku.fabric.mixins.json");
 
         assertTrue(modMetadata.contains("de.keksuccino.rinku.RinkuFabric"));
-        assertTrue(modMetadata.contains("\"version\": \"3.0.0\""));
+        assertTrue(modMetadata.contains("\"version\": \"" + Rinku.VERSION + "\""));
         assertTrue(modMetadata.contains("\"minecraft\": \">=1.21.11\""));
         assertTrue(modMetadata.contains("\"java\": \">=21\""));
         assertTrue(mixinMetadata.contains("\"package\": \"de.keksuccino.rinku.mixins.fabric\""));
