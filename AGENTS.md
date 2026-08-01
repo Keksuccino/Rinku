@@ -68,10 +68,6 @@
 - When inspecting the source of other mods, always prefer the latest available build of the mod for this project's Minecraft version, to be able to understand how the other mod's code works, and to see if the conflict maybe already got fixed on the other mod's side.
 - When you need to add compat code for a mod, place these classes in dedicated and well-organized "compat" packages.
 
-## Networking & Packets
-- Rinku uses its own custom packet system.
-- If you need to add packets for a feature, make sure to analyze the `de.keksuccino.rinku.networking` package in the `common` module first, to understand how packets get implemented and registered.
-
 ## Localization
 - Always add en_us localizations for the features you add. Only en_us.
 - The en_us.json file is pretty large, too large for you to read the full file, so if you need something from it, search for specific lines.
