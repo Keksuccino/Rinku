@@ -52,10 +52,7 @@ NeoForge ships deobfuscated jars by default, so the dependency can be declared w
 
 ## Building & Modifying Rinku
 
-The build resolves the JCEF Java binary and source JARs from the `Keksuccino/Rinku` GitHub release selected by `jcef_commit` in `gradle.properties`; no submodule checkout is required. When updating JCEF, select a lowercase 40-character commit that has a matching `java-cef-<commit>` release containing both `rinku.jar` and `rinku-sources.jar`. The same compiled identity selects the matching native runtime release. JCEF classes are flat-merged into Rinku binaries and the upstream source classifier is flat-merged into every Rinku sources JAR, so published metadata needs no transitive JCEF dependency and consumers still receive JCEF sources.
-
-To run the Fabric client: `./gradlew fabricClient`
-To run the NeoForge client: `./gradlew neoforgeClient`
+The build resolves the JCEF Java binary and source JARs from the `Keksuccino/jcef-rinku` GitHub release selected by `jcef_commit` in `gradle.properties`; no submodule checkout is required. When updating JCEF, select a lowercase 40-character commit that has a matching `java-cef-<commit>` release containing both `jcef-rinku.jar` and `jcef-rinku-sources.jar`. The same compiled identity selects the matching native runtime release. JCEF classes are flat-merged into Rinku binaries and the upstream source classifier is flat-merged into every Rinku sources JAR, so published metadata needs no transitive JCEF dependency and consumers still receive JCEF sources.
 
 In-game, there is a demo browser if you press F12 after you're loaded into a world (the demo browser only exists when you're running from a development environment).
 
