@@ -79,6 +79,47 @@ processResources {
     from project(":common").sourceSets.main.resources
 }
 
+def remapJarTask = tasks.named("remapJar")
+def remappedJar = remapJarTask.flatMap { it.archiveFile }
+def verifyFabricMixinRefmapPackaging = tasks.register("verifyFabricMixinRefmapPackaging") {
+    group = "verification"
+    description = "Verifies that every packaged Fabric Mixin configuration references a populated refmap."
+    dependsOn(remapJarTask)
+    inputs.file(remappedJar)
+    doLast {
+        def jarFile = remappedJar.get().asFile
+        new java.util.jar.JarFile(jarFile).withCloseable { archive ->
+            def fabricMetadataEntry = archive.getJarEntry("fabric.mod.json")
+            if (fabricMetadataEntry == null) throw new GradleException("${jarFile} is missing fabric.mod.json.")
+
+            def fabricMetadata = new groovy.json.JsonSlurper().parse(archive.getInputStream(fabricMetadataEntry))
+            if (!(fabricMetadata.mixins instanceof List) || fabricMetadata.mixins.isEmpty()) throw new GradleException("${jarFile} does not declare any Mixin configurations in fabric.mod.json.")
+
+            fabricMetadata.mixins.each { declaration ->
+                def configName = declaration instanceof Map ? declaration.config : declaration
+                if (!(configName instanceof String) || configName.isBlank()) throw new GradleException("${jarFile} contains an invalid Mixin configuration declaration: ${declaration}")
+
+                def configEntry = archive.getJarEntry(configName)
+                if (configEntry == null) throw new GradleException("${jarFile} is missing declared Mixin configuration ${configName}.")
+
+                def config = new groovy.json.JsonSlurper().parse(archive.getInputStream(configEntry))
+                def refmapName = config.refmap
+                if (!(refmapName instanceof String) || refmapName.isBlank()) throw new GradleException("${configName} does not declare a Mixin refmap.")
+
+                def refmapEntry = archive.getJarEntry(refmapName)
+                if (refmapEntry == null || refmapEntry.size == 0) throw new GradleException("${jarFile} is missing populated Mixin refmap ${refmapName} referenced by ${configName}.")
+
+                def refmap = new groovy.json.JsonSlurper().parse(archive.getInputStream(refmapEntry))
+                if (!(refmap.mappings instanceof Map) || refmap.mappings.isEmpty()) throw new GradleException("Mixin refmap ${refmapName} referenced by ${configName} contains no mappings.")
+            }
+        }
+    }
+}
+
+tasks.named("check").configure {
+    dependsOn(verifyFabricMixinRefmapPackaging)
+}
+
 publishing {
     publications {
         mavenJava(MavenPublication) {
