@@ -27,6 +27,13 @@ dependencies {
     testRuntimeOnly "org.junit.platform:junit-platform-launcher:1.10.2"
 }
 
+loom {
+    mixin {
+        useLegacyMixinAp = true
+        defaultRefmapName.set("${mod_id}.refmap.json")
+    }
+}
+
 def generatedJcefIdentityDirectory = layout.buildDirectory.dir("generated/sources/jcefIdentity/java/main")
 def generatedJcefIdentitySourceFile = generatedJcefIdentityDirectory.map { it.file("de/keksuccino/rinku/JcefRuntimeIdentity.java") }
 def generateJcefRuntimeIdentity = tasks.register("generateJcefRuntimeIdentity") {

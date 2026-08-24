@@ -3,6 +3,7 @@
   "minVersion": "0.8",
   "package": "de.keksuccino.rinku.mixins.fabric",
   "compatibilityLevel": "JAVA_21",
+  "refmap": "rinku.refmap.json",
   "mixins": [
   ],
   "client": [
