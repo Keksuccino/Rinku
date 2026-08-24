@@ -1,4 +1,12 @@
 
+## RINKU v3.0.2
+
+- Fixed crash at startup on pre-MC-26 Fabric builds (#14)
+
+
+
+
+
 ## RINKU v3.0.0
 
 - Keksuccino's fork of MCEF is now officially called "Rinku".
