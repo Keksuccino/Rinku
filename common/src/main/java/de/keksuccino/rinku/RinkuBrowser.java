@@ -18,6 +18,7 @@ import org.lwjgl.system.MemoryUtil;
 import org.slf4j.Logger;
 import java.awt.*;
 import java.nio.ByteBuffer;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 import static org.lwjgl.opengl.GL11.*;
@@ -32,6 +33,8 @@ public class RinkuBrowser extends CefBrowserOsr {
 
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final int MAX_PENDING_PAINT_STREAMS = 2;
+    private static final BrowserCursorController CURSOR_CONTROLLER = new BrowserCursorController();
+    private static final BrowserCursorController.CursorBackend CURSOR_BACKEND = new GlfwCursorBackend();
 
     /**
      * The renderer for the browser.
@@ -1038,16 +1041,41 @@ public class RinkuBrowser extends CefBrowserOsr {
     }
 
     public void setCursor(CefCursorType cursorType) {
-        if (cursorType == CefCursorType.NONE) {
-            GLFW.glfwSetInputMode(Minecraft.getInstance().getWindow().getWindow(), GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+        Objects.requireNonNull(cursorType);
+        Minecraft minecraft = Minecraft.getInstance();
+        Runnable cursorUpdate = () -> CURSOR_CONTROLLER.apply(cursorType, CURSOR_BACKEND);
+        if (RenderSystem.isOnRenderThread()) {
+            cursorUpdate.run();
         } else {
-            GLFW.glfwSetInputMode(Minecraft.getInstance().getWindow().getWindow(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-            GLFW.glfwSetCursor(Minecraft.getInstance().getWindow().getWindow(), Rinku.getGLFWCursorHandle(cursorType));
+            // CEF may report cursor changes from its lifecycle thread; GLFW mutations belong on Minecraft's render thread.
+            minecraft.execute(cursorUpdate);
         }
     }
 
     private static CefCursorType resolveCursorType(int cursorTypeId) {
         return CefCursorType.fromId(cursorTypeId);
+    }
+
+    private static final class GlfwCursorBackend implements BrowserCursorController.CursorBackend {
+
+        @Override
+        public boolean isMouseGrabbed() {
+            // Never desynchronize GLFW's cursor mode from MouseHandler's ownership state during gameplay.
+            return Minecraft.getInstance().mouseHandler.isMouseGrabbed();
+        }
+
+        @Override
+        public void hideCursor() {
+            GLFW.glfwSetInputMode(Minecraft.getInstance().getWindow().getWindow(), GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+        }
+
+        @Override
+        public void showCursor(CefCursorType cursorType) {
+            long window = Minecraft.getInstance().getWindow().getWindow();
+            GLFW.glfwSetCursor(window, Rinku.getGLFWCursorHandle(cursorType));
+            GLFW.glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+        }
+
     }
 
     @FunctionalInterface
