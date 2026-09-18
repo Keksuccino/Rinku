@@ -28,6 +28,7 @@ public final class RinkuRenderCoordinator {
     public static void shutdownOnRenderThread() {
         RenderSystem.assertOnRenderThread();
         BROWSERS.shutdown(RinkuBrowser::shutdownOnRenderThread, RinkuRenderCoordinator::logBrowserFailure);
+        SdlBrowserCursorBackend.INSTANCE.close();
     }
 
     private static void logBrowserFailure(RinkuBrowser browser, Throwable failure) {

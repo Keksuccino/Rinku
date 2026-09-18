@@ -2,9 +2,9 @@ package de.keksuccino.rinku;
 
 import com.mojang.logging.LogUtils;
 import de.keksuccino.rinku.listeners.RinkuCursorChangeListener;
-import com.mojang.blaze3d.opengl.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.resources.Identifier;
 import org.cef.browser.CefBrowser;
 import org.cef.browser.CefBrowserOsr;
@@ -13,7 +13,6 @@ import org.cef.event.CefKeyEvent;
 import org.cef.event.CefMouseEvent;
 import org.cef.event.CefMouseWheelEvent;
 import org.cef.misc.CefCursorType;
-import org.lwjgl.glfw.GLFW;
 import org.lwjgl.system.MemoryUtil;
 import org.slf4j.Logger;
 import java.awt.*;
@@ -21,8 +20,8 @@ import java.nio.ByteBuffer;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
-import static org.lwjgl.opengl.GL11.*;
-import static org.lwjgl.glfw.GLFW.*;
+import static com.mojang.blaze3d.platform.InputConstants.*;
+import static de.keksuccino.rinku.RinkuInput.*;
 
 /**
  * An instance of an "Off-screen rendered" Chromium web browser.
@@ -34,7 +33,7 @@ public class RinkuBrowser extends CefBrowserOsr {
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final int MAX_PENDING_PAINT_STREAMS = 2;
     private static final BrowserCursorController CURSOR_CONTROLLER = new BrowserCursorController();
-    private static final BrowserCursorController.CursorBackend CURSOR_BACKEND = new GlfwCursorBackend();
+    private static final BrowserCursorController.CursorBackend CURSOR_BACKEND = SdlBrowserCursorBackend.INSTANCE;
 
     /**
      * The renderer for the browser.
@@ -372,18 +371,13 @@ public class RinkuBrowser extends CefBrowserOsr {
                 return;
             }
 
-            GlStateManager._bindTexture(renderer.getTextureID());
-            GlStateManager._pixelStore(GL_UNPACK_ROW_LENGTH, width);
-
             for (Rectangle dirtyRect : dirtyRects) {
                 Rectangle clippedRect = clipRect(dirtyRect, width, height);
                 if (clippedRect == null) {
                     continue;
                 }
 
-                GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, clippedRect.x);
-                GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, clippedRect.y);
-                renderer.onPaint(buffer, clippedRect.x, clippedRect.y, clippedRect.width, clippedRect.height);
+                renderer.onPaint(buffer, width, clippedRect.x, clippedRect.y, clippedRect.x, clippedRect.y, clippedRect.width, clippedRect.height);
             }
 
             restorePopupAfterViewPaint(width, height, popupRect, showPopupSnapshot, popupStateGeneration);
@@ -426,10 +420,7 @@ public class RinkuBrowser extends CefBrowserOsr {
                 }
                 PopupPaintGeometry.Region uploadSource = upload.source();
                 PopupPaintGeometry.Region uploadDestination = upload.destination();
-                GlStateManager._pixelStore(GL_UNPACK_ROW_LENGTH, width);
-                GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, uploadSource.x());
-                GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, uploadSource.y());
-                renderer.onPaint(buffer, uploadDestination.x(), uploadDestination.y(), uploadDestination.width(), uploadDestination.height());
+                renderer.onPaint(buffer, width, uploadSource.x(), uploadSource.y(), uploadDestination.x(), uploadDestination.y(), uploadDestination.width(), uploadDestination.height());
             }
 
             // Full retained callback pixels are valid even when the popup had no visible destination pixels to upload.
@@ -460,10 +451,7 @@ public class RinkuBrowser extends CefBrowserOsr {
         PopupPaintGeometry.Upload upload = paintPlan.upload();
         PopupPaintGeometry.Region uploadSource = upload.source();
         PopupPaintGeometry.Region uploadDestination = upload.destination();
-        GlStateManager._pixelStore(GL_UNPACK_ROW_LENGTH, popupRect.width);
-        GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, uploadSource.x());
-        GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, uploadSource.y());
-        renderer.onPaint(popupBuffer, uploadDestination.x(), uploadDestination.y(), uploadDestination.width(), uploadDestination.height());
+        renderer.onPaint(popupBuffer, popupRect.width, uploadSource.x(), uploadSource.y(), uploadDestination.x(), uploadDestination.y(), uploadDestination.width(), uploadDestination.height());
     }
 
     private void invalidateRetainedPopupPixels() {
@@ -544,74 +532,98 @@ public class RinkuBrowser extends CefBrowserOsr {
     }
 
     // Inputs
+    @Override
+    public void setFocus(boolean focused) {
+        super.setFocus(focused);
+        Minecraft minecraft = Minecraft.getInstance();
+        Runnable update = () -> {
+            // SDL emits committed text only while an owner has enabled text input. Owner-scoped release
+            // prevents an old browser from disabling a newly focused EditBox or another browser.
+            if (focused && !closeController.isCloseRequested() && minecraft.gui.screen() != null && !minecraft.mouseHandler.isMouseGrabbed()) {
+                minecraft.textInputManager().startTextInput(this);
+            } else {
+                minecraft.textInputManager().stopTextInput(this);
+            }
+        };
+        if (RenderSystem.isOnRenderThread()) update.run();
+        else minecraft.execute(update);
+    }
+
+    public void sendKeyPress(KeyEvent event) {
+        sendKeyPress(event.key(), 0L, event.modifiers());
+    }
+
+    public void sendKeyRelease(KeyEvent event) {
+        sendKeyRelease(event.key(), 0L, event.modifiers());
+    }
+
+    /** Accepts a Minecraft SDL key and modifiers. scanCode is an optional OS-native code, not an SDL scancode; use zero for JCEF's platform fallback. */
     public void sendKeyPress(int keyCode, long scanCode, int modifiers) {
         updateModifierStateOnKeyPress(keyCode);
-        int normalizedModifiers = normalizeAltGrModifiers(modifiers);
+        int normalizedModifiers = normalizeAltGrModifiers(toCefModifiers(modifiers));
 
         if (browserControls) {
-            if (normalizedModifiers == GLFW_MOD_CONTROL) {
-                if (keyCode == GLFW_KEY_R) {
+            if (normalizedModifiers == CEF_MOD_CONTROL) {
+                if (keyCode == KEY_R) {
                     reload();
                     return;
-                } else if (keyCode == GLFW_KEY_EQUAL) {
+                } else if (keyCode == KEY_EQUALS) {
                     if (getZoomLevel() < 9) setZoomLevel(getZoomLevel() + 1);
                     return;
-                } else if (keyCode == GLFW_KEY_MINUS) {
+                } else if (keyCode == KEY_MINUS) {
                     if (getZoomLevel() > -9) setZoomLevel(getZoomLevel() - 1);
                     return;
-                } else if (keyCode == GLFW_KEY_0) {
+                } else if (keyCode == KEY_0) {
                     setZoomLevel(0);
                     return;
                 }
-            } else if (normalizedModifiers == GLFW_MOD_ALT) {
-                if (keyCode == GLFW_KEY_LEFT && canGoBack()) {
+            } else if (normalizedModifiers == CEF_MOD_ALT) {
+                if (keyCode == KEY_LEFT && canGoBack()) {
                     goBack();
                     return;
-                } else if (keyCode == GLFW_KEY_RIGHT && canGoForward()) {
+                } else if (keyCode == KEY_RIGHT && canGoForward()) {
                     goForward();
                     return;
                 }
             }
         }
 
-        CefKeyEvent e = new CefKeyEvent(CefKeyEvent.KEY_PRESS, keyCode, (char) keyCode, normalizedModifiers);
+        CefKeyEvent e = createKeyEvent(CefKeyEvent.KEY_PRESS, keyCode, normalizedModifiers);
         e.scancode = scanCode;
         sendKeyEvent(e);
     }
 
+    /** Accepts the same SDL key/modifiers and optional OS-native scan code as sendKeyPress. */
     public void sendKeyRelease(int keyCode, long scanCode, int modifiers) {
-        int normalizedModifiers = normalizeAltGrModifiers(modifiers);
+        int normalizedModifiers = normalizeAltGrModifiers(toCefModifiers(modifiers));
 
         if (browserControls) {
-            if (normalizedModifiers == GLFW_MOD_CONTROL) {
-                if (keyCode == GLFW_KEY_R) return;
-                else if (keyCode == GLFW_KEY_EQUAL) return;
-                else if (keyCode == GLFW_KEY_MINUS) return;
-                else if (keyCode == GLFW_KEY_0) return;
-            } else if (normalizedModifiers == GLFW_MOD_ALT) {
-                if (keyCode == GLFW_KEY_LEFT && canGoBack()) return;
-                else if (keyCode == GLFW_KEY_RIGHT && canGoForward()) return;
+            if (normalizedModifiers == CEF_MOD_CONTROL) {
+                if (keyCode == KEY_R) return;
+                else if (keyCode == KEY_EQUALS) return;
+                else if (keyCode == KEY_MINUS) return;
+                else if (keyCode == KEY_0) return;
+            } else if (normalizedModifiers == CEF_MOD_ALT) {
+                if (keyCode == KEY_LEFT && canGoBack()) return;
+                else if (keyCode == KEY_RIGHT && canGoForward()) return;
             }
         }
 
-        CefKeyEvent e = new CefKeyEvent(CefKeyEvent.KEY_RELEASE, keyCode, (char) keyCode, normalizedModifiers);
+        CefKeyEvent e = createKeyEvent(CefKeyEvent.KEY_RELEASE, keyCode, normalizedModifiers);
         e.scancode = scanCode;
         sendKeyEvent(e);
         updateModifierStateOnKeyRelease(keyCode);
     }
 
     public void sendKeyTyped(char c, int modifiers) {
-        int normalizedModifiers = normalizeAltGrModifiers(modifiers);
+        int normalizedModifiers = normalizeAltGrModifiers(toCefModifiers(modifiers));
 
         if (browserControls) {
-            if (normalizedModifiers == GLFW_MOD_CONTROL) {
-                if ((int) c == GLFW_KEY_R) return;
-                else if ((int) c == GLFW_KEY_EQUAL) return;
-                else if ((int) c == GLFW_KEY_MINUS) return;
-                else if ((int) c == GLFW_KEY_0) return;
-            } else if (normalizedModifiers == GLFW_MOD_ALT) {
-                if ((int) c == GLFW_KEY_LEFT && canGoBack()) return;
-                else if ((int) c == GLFW_KEY_RIGHT && canGoForward()) return;
+            if (normalizedModifiers == CEF_MOD_CONTROL) {
+                if ((int) c == 'R') return;
+                else if ((int) c == '=') return;
+                else if ((int) c == '-') return;
+                else if ((int) c == '0') return;
             }
         }
 
@@ -620,32 +632,32 @@ public class RinkuBrowser extends CefBrowserOsr {
     }
 
     private void updateModifierStateOnKeyPress(int keyCode) {
-        if (keyCode == GLFW_KEY_RIGHT_ALT) {
+        if (keyCode == KEY_RALT) {
             rightAltDown = true;
         }
     }
 
     private void updateModifierStateOnKeyRelease(int keyCode) {
-        if (keyCode == GLFW_KEY_RIGHT_ALT) {
+        if (keyCode == KEY_RALT) {
             rightAltDown = false;
         }
     }
 
     private int normalizeAltGrModifiers(int modifiers) {
-        if (rightAltDown && (modifiers & GLFW_MOD_ALT) == 0) {
+        if (rightAltDown && (modifiers & CEF_MOD_ALT) == 0) {
             rightAltDown = false;
         }
 
-        // GLFW reports AltGr as Ctrl+Alt on many layouts.
+        // Preserve AltGr text input when the platform reports it as Ctrl+Alt.
         if (!rightAltDown) {
             return modifiers;
         }
 
-        if ((modifiers & GLFW_MOD_CONTROL) == 0 || (modifiers & GLFW_MOD_ALT) == 0) {
+        if ((modifiers & CEF_MOD_CONTROL) == 0 || (modifiers & CEF_MOD_ALT) == 0) {
             return modifiers;
         }
 
-        return modifiers & ~(GLFW_MOD_CONTROL | GLFW_MOD_ALT);
+        return modifiers & ~(CEF_MOD_CONTROL | CEF_MOD_ALT);
     }
 
     public void sendMouseMove(int mouseX, int mouseY) {
@@ -658,29 +670,27 @@ public class RinkuBrowser extends CefBrowserOsr {
 
     // TODO: it may be necessary to add modifiers here
     public void sendMousePress(int mouseX, int mouseY, int button) {
-        // for some reason, middle and right are swapped in MC
-        if (button == 1) button = 2;
-        else if (button == 2) button = 1;
+        button = toCefMouseButton(button);
+        if (button < 0) return;
 
         if (button == 0) btnMask |= CefMouseEvent.BUTTON1_MASK;
         else if (button == 1) btnMask |= CefMouseEvent.BUTTON2_MASK;
         else if (button == 2) btnMask |= CefMouseEvent.BUTTON3_MASK;
 
-        CefMouseEvent e = new CefMouseEvent(GLFW_PRESS, mouseX, mouseY, 1, button, btnMask);
+        CefMouseEvent e = new CefMouseEvent(PRESS, mouseX, mouseY, 1, button, btnMask);
         sendMouseEvent(e);
     }
 
     // TODO: it may be necessary to add modifiers here
     public void sendMouseRelease(int mouseX, int mouseY, int button) {
-        // For some reason, middle and right are swapped in MC
-        if (button == 1) button = 2;
-        else if (button == 2) button = 1;
+        button = toCefMouseButton(button);
+        if (button < 0) return;
 
         if (button == 0 && (btnMask & CefMouseEvent.BUTTON1_MASK) != 0) btnMask ^= CefMouseEvent.BUTTON1_MASK;
         else if (button == 1 && (btnMask & CefMouseEvent.BUTTON2_MASK) != 0) btnMask ^= CefMouseEvent.BUTTON2_MASK;
         else if (button == 2 && (btnMask & CefMouseEvent.BUTTON3_MASK) != 0) btnMask ^= CefMouseEvent.BUTTON3_MASK;
 
-        CefMouseEvent e = new CefMouseEvent(GLFW_RELEASE, mouseX, mouseY, 1, button, btnMask);
+        CefMouseEvent e = new CefMouseEvent(RELEASE, mouseX, mouseY, 1, button, btnMask);
         sendMouseEvent(e);
 
         // drag&drop
@@ -693,8 +703,9 @@ public class RinkuBrowser extends CefBrowserOsr {
 
     // TODO: smooth scrolling
     public void sendMouseWheel(int mouseX, int mouseY, double amount, int modifiers) {
+        modifiers = toCefPointerModifiers(modifiers);
         if (browserControls) {
-            if ((modifiers & GLFW_MOD_CONTROL) != 0) {
+            if ((modifiers & CEF_MOD_CONTROL) != 0) {
                 if (amount > 0) {
                     if (getZoomLevel() < 9) setZoomLevel(getZoomLevel() + 1);
                 } else if (getZoomLevel() > -9) setZoomLevel(getZoomLevel() - 1);
@@ -948,6 +959,7 @@ public class RinkuBrowser extends CefBrowserOsr {
             return;
         }
         rendererCleanupStarted = true;
+        Minecraft.getInstance().textInputManager().stopTextInput(this);
         Throwable failure = null;
         try {
             // Cleanup is safe before successful initialization and is required when initialization failed partway.
@@ -1031,35 +1043,13 @@ public class RinkuBrowser extends CefBrowserOsr {
         if (RenderSystem.isOnRenderThread()) {
             cursorUpdate.run();
         } else {
-            // CEF may report cursor changes from its lifecycle thread; GLFW mutations belong on Minecraft's render thread.
+            // CEF may report cursor changes from its lifecycle thread; SDL mutations belong on Minecraft's render thread.
             minecraft.execute(cursorUpdate);
         }
     }
 
     private static CefCursorType resolveCursorType(int cursorTypeId) {
         return CefCursorType.fromId(cursorTypeId);
-    }
-
-    private static final class GlfwCursorBackend implements BrowserCursorController.CursorBackend {
-
-        @Override
-        public boolean isMouseGrabbed() {
-            // Never desynchronize GLFW's cursor mode from MouseHandler's ownership state during gameplay.
-            return Minecraft.getInstance().mouseHandler.isMouseGrabbed();
-        }
-
-        @Override
-        public void hideCursor() {
-            GLFW.glfwSetInputMode(Minecraft.getInstance().getWindow().handle(), GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
-        }
-
-        @Override
-        public void showCursor(CefCursorType cursorType) {
-            long window = Minecraft.getInstance().getWindow().handle();
-            GLFW.glfwSetCursor(window, Rinku.getGLFWCursorHandle(cursorType));
-            GLFW.glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-        }
-
     }
 
     @FunctionalInterface

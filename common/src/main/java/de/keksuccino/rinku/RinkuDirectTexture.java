@@ -1,7 +1,7 @@
 package de.keksuccino.rinku;
 
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.GpuTexture;
+import com.mojang.renderpearl.api.textures.GpuTexture;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 
 /**

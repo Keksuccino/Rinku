@@ -11,8 +11,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(GameRenderer.class)
 public class MixinGameRenderer {
 
-    @Inject(method = "render", at = @At("HEAD"))
-    public void head_render_RINKU(DeltaTracker deltaTracker, boolean renderLevel, CallbackInfo info) {
+    // Pump CEF before GUI extraction captures texture views; a paint callback can resize or replace them.
+    @Inject(method = "extract", at = @At("HEAD"))
+    public void before_extract_Rinku(DeltaTracker deltaTracker, boolean renderLevel, CallbackInfo info) {
         if (Rinku.isInitialized()) {
             Rinku.getApp().getHandle().N_DoMessageLoopWork();
         }

@@ -1,17 +1,18 @@
 package de.keksuccino.rinku;
 
-import com.mojang.blaze3d.GpuFormat;
-import com.mojang.blaze3d.opengl.GlStateManager;
-import com.mojang.blaze3d.opengl.GlTexture;
+import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.backend.opengl.GlTexture;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.GpuTexture;
+import com.mojang.renderpearl.api.textures.GpuTexture;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
+import org.jetbrains.annotations.Nullable;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.UUID;
-import static org.lwjgl.opengl.GL12.*;
 
 public class RinkuRenderer {
+
     private final boolean transparent;
     private GpuTexture texture;
     private int textureWidth = 0;
@@ -21,7 +22,7 @@ public class RinkuRenderer {
     private final Identifier textureIdentifier;
     private RinkuDirectTexture directTexture;
     private boolean textureRegistered = false;
-    private ByteBuffer fallbackRgbaUploadBuffer;
+    private ByteBuffer rgbaUploadBuffer;
 
     protected RinkuRenderer(boolean transparent) {
         this.transparent = transparent;
@@ -74,7 +75,7 @@ public class RinkuRenderer {
     }
 
     public boolean supportsDirtyRectUpload() {
-        return texture instanceof GlTexture && getTextureID() != 0;
+        return texture != null && !texture.isClosed();
     }
     
     public int getTextureWidth() {
@@ -90,11 +91,12 @@ public class RinkuRenderer {
     }
 
     protected void cleanup() {
+        if (directTexture != null) directTexture.close();
         if (texture != null) {
             texture.close();
             texture = null;
         }
-        fallbackRgbaUploadBuffer = null;
+        rgbaUploadBuffer = null;
         
         // Unregister from TextureManager
         if (textureRegistered && textureIdentifier != null) {
@@ -105,59 +107,31 @@ public class RinkuRenderer {
 
     protected void onPaint(ByteBuffer buffer, int width, int height) {
         RenderSystem.assertOnRenderThread();
-        // Create or recreate texture if size changed
         if (texture == null || textureWidth != width || textureHeight != height) {
-            if (texture != null) {
-                texture.close();
-            }
-            
-            // Create new GpuTexture using the device
-            String label = "Rinku Browser Texture " + width + "x" + height;
-            texture = RenderSystem.getDevice().createTexture(
-                label,
-                GpuTexture.USAGE_TEXTURE_BINDING | GpuTexture.USAGE_COPY_DST,
-                GpuFormat.RGBA8_UNORM,
-                width,
-                height,
-                1, // depthOrLayers
-                1  // mipLevels
-            );
-            
+            GpuTexture replacement = RenderSystem.getDevice().createTexture("Rinku Browser Texture " + width + "x" + height, GpuTexture.USAGE_TEXTURE_BINDING | GpuTexture.USAGE_COPY_DST, GpuFormat.RGBA8_UNORM, width, height, 1, 1);
+            if (directTexture != null) directTexture.close();
+            if (texture != null) texture.close();
+            texture = replacement;
             textureWidth = width;
             textureHeight = height;
         }
-
-        syncDirectTextureViewIfNeeded();
-
-        if (texture instanceof GlTexture glTexture) {
-            // Bind the texture directly using its GL ID
-            GlStateManager._bindTexture(glTexture.glId());
-            GlStateManager._pixelStore(GL_UNPACK_ROW_LENGTH, width);
-            GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, 0);
-            GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, 0);
-            
-            // Upload the full texture
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
-                    GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, buffer);
-            return;
-        }
-
-        uploadWithCommandEncoder(buffer, 0, 0, width, height);
+        onPaint(buffer, width, 0, 0, 0, 0, width, height);
     }
 
+    /** Uploads a tightly packed source rectangle. */
     protected void onPaint(ByteBuffer buffer, int x, int y, int width, int height) {
-        RenderSystem.assertOnRenderThread();
-        syncDirectTextureViewIfNeeded();
-        if (texture instanceof GlTexture glTexture) {
-            // Bind and update sub-region
-            GlStateManager._bindTexture(glTexture.glId());
-            glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, width, height, GL_BGRA,
-                    GL_UNSIGNED_INT_8_8_8_8_REV, buffer);
-            return;
-        }
+        onPaint(buffer, width, 0, 0, x, y, width, height);
+    }
 
-        // Fallback upload path assumes a tightly packed source rectangle.
-        uploadWithCommandEncoder(buffer, x, y, width, height);
+    /** Source coordinates and row stride are explicit: popup sources and destination textures have different geometry. */
+    protected void onPaint(ByteBuffer buffer, int sourceWidth, int sourceX, int sourceY, int destinationX, int destinationY, int width, int height) {
+        RenderSystem.assertOnRenderThread();
+        if (!supportsDirtyRectUpload()) return;
+        syncDirectTextureViewIfNeeded();
+        rgbaUploadBuffer = convertBgraToRgba(buffer, sourceWidth, sourceX, sourceY, width, height, rgbaUploadBuffer);
+        // Both RenderPearl backends consume/copy the source bytes during this call. Minecraft submits its shared
+        // command encoder at the end of the frame, so this staging buffer can be reused for the next dirty region.
+        RenderSystem.getDevice().createCommandEncoder().writeToTexture(texture, rgbaUploadBuffer, 0, 0, destinationX, destinationY, width, height);
     }
 
     private void syncDirectTextureViewIfNeeded() {
@@ -174,70 +148,29 @@ public class RinkuRenderer {
         }
     }
 
-    private void uploadWithCommandEncoder(
-            ByteBuffer buffer,
-            int destinationX,
-            int destinationY,
-            int copyWidth,
-            int copyHeight
-    ) {
-        if (texture == null || buffer == null) {
-            return;
+    static ByteBuffer convertBgraToRgba(ByteBuffer source, int sourceWidth, int sourceX, int sourceY, int width, int height, @Nullable ByteBuffer reusable) {
+        long requiredPixels = (long) width * height;
+        long lastPixel = ((long) sourceY + height - 1L) * sourceWidth + sourceX + width;
+        if (sourceWidth <= 0 || sourceX < 0 || sourceY < 0 || width <= 0 || height <= 0 || (long) sourceX + width > sourceWidth || requiredPixels > Integer.MAX_VALUE / 4 || lastPixel > source.capacity() / 4L) {
+            throw new IllegalArgumentException("Browser paint rectangle exceeds its source buffer");
         }
-
-        int requiredBytes = copyWidth * copyHeight * 4;
-        if (requiredBytes <= 0 || buffer.capacity() < requiredBytes) {
-            return;
+        int requiredBytes = (int) requiredPixels * 4;
+        ByteBuffer target = reusable;
+        if (target == null || target.capacity() < requiredBytes) target = ByteBuffer.allocateDirect(requiredBytes);
+        target.clear();
+        target.limit(requiredBytes);
+        target.order(ByteOrder.LITTLE_ENDIAN);
+        // CEF supplies an entire BGRA surface even for partial paints. Ignore callback buffer cursors and
+        // pack only the requested rows as RGBA, preserving alpha for transparent browsers and popup overlays.
+        ByteBuffer pixels = source.duplicate().clear().order(ByteOrder.LITTLE_ENDIAN);
+        for (int row = 0; row < height; row++) {
+            int offset = ((sourceY + row) * sourceWidth + sourceX) * 4;
+            for (int column = 0; column < width; column++, offset += 4) {
+                int bgra = pixels.getInt(offset);
+                target.putInt((bgra & 0xff00ff00) | ((bgra & 0xff) << 16) | ((bgra >>> 16) & 0xff));
+            }
         }
-
-        ByteBuffer uploadBuffer = convertBgraToRgba(buffer, requiredBytes);
-        if (uploadBuffer == null) {
-            return;
-        }
-
-        RenderSystem.getDevice()
-                .createCommandEncoder()
-                .writeToTexture(
-                        texture,
-                        uploadBuffer.slice(),
-                        0,
-                        0,
-                        destinationX,
-                        destinationY,
-                        copyWidth,
-                        copyHeight
-                );
+        return target.flip();
     }
 
-    private ByteBuffer convertBgraToRgba(ByteBuffer sourceBuffer, int requiredBytes) {
-        if (requiredBytes <= 0 || (requiredBytes & 3) != 0) {
-            return null;
-        }
-
-        if (fallbackRgbaUploadBuffer == null || fallbackRgbaUploadBuffer.capacity() < requiredBytes) {
-            fallbackRgbaUploadBuffer = ByteBuffer.allocateDirect(requiredBytes);
-        }
-
-        ByteBuffer src = sourceBuffer.duplicate();
-        src.position(0);
-        src.limit(requiredBytes);
-
-        ByteBuffer dst = fallbackRgbaUploadBuffer.duplicate();
-        dst.clear();
-        dst.limit(requiredBytes);
-
-        for (int i = 0; i < requiredBytes; i += 4) {
-            byte b = src.get(i);
-            byte g = src.get(i + 1);
-            byte r = src.get(i + 2);
-            byte a = src.get(i + 3);
-            dst.put(i, r);
-            dst.put(i + 1, g);
-            dst.put(i + 2, b);
-            dst.put(i + 3, a);
-        }
-
-        dst.position(0);
-        return dst;
-    }
 }

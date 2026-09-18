@@ -52,7 +52,9 @@ NeoForge ships deobfuscated jars by default, so the dependency can be declared w
 
 ## Building & Modifying Rinku
 
-This branch targets Minecraft 26.3 with Java 25. Use the included Gradle 9.7.1 wrapper. The build configuration is prepared for 26.3; the Java code port is still pending.
+This branch targets Minecraft 26.3 with Java 25. Use the included Gradle 9.7.1 wrapper.
+
+Minecraft 26.3 uses SDL input. Forward Minecraft `KeyEvent` objects directly to `RinkuBrowser.sendKeyPress(event)` and `sendKeyRelease(event)`. The integer input methods accept Minecraft's SDL key, mouse-button, and modifier values from `InputConstants`. The optional `scanCode` argument is an OS-native code; pass `0` to let JCEF resolve it, since SDL scancodes are not OS-native codes. Call `setFocus(true)` when the browser gains focus and `setFocus(false)` when it loses focus so Minecraft can deliver committed text to the correct input owner. Browser textures use the RenderPearl GPU API on both OpenGL and Vulkan.
 
 The build resolves the JCEF Java binary and source JARs from the `Keksuccino/jcef-rinku` GitHub release selected by `jcef_commit` in `gradle.properties`; no submodule checkout is required. When updating JCEF, select a lowercase 40-character commit that has a matching `java-cef-<commit>` release containing both `jcef-rinku.jar` and `jcef-rinku-sources.jar`. The same compiled identity selects the matching native runtime release. JCEF classes are flat-merged into Rinku binaries and the upstream source classifier is flat-merged into every Rinku sources JAR, so published metadata needs no transitive JCEF dependency and consumers still receive JCEF sources.
 

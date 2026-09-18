@@ -6,9 +6,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import de.keksuccino.rinku.platform.Services;
 import de.keksuccino.rinku.util.CefUtil;
 import net.minecraft.client.Minecraft;
-import org.cef.misc.CefCursorType;
 import org.jetbrains.annotations.Nullable;
-import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 import com.mojang.logging.LogUtils;
 import java.io.IOException;
@@ -21,7 +19,6 @@ public final class Rinku {
     public static final String VERSION = "3.0.4";
 
     private static final RinkuInitializationController INITIALIZATION_CONTROLLER = new RinkuInitializationController();
-    private static final HashMap<CefCursorType, Long> CEF_TO_GLFW_CURSORS = new HashMap<>();
     private static final ArrayList<RinkuInitListener> awaitingInit = new ArrayList<>();
     private static final String PRELOADED_BROWSER_START_URL = "about:blank";
     private static final Object PRELOADED_BROWSER_POOL_LOCK = new Object();
@@ -424,25 +421,6 @@ public final class Rinku {
      */
     public static String getJavaCefCommit() throws IOException {
         return JcefRuntimeIdentity.JAVA_CEF_COMMIT;
-    }
-
-    /**
-     * Helper method to get a GLFW cursor handle for the given {@link CefCursorType} cursor type
-     */
-    static long getGLFWCursorHandle(CefCursorType cursorType) {
-        if (cursorType == null || cursorType.glfwId == 0) {
-            // Use the operating system default cursor for unmapped/unsupported CEF cursor types.
-            return 0L;
-        }
-
-        if (CEF_TO_GLFW_CURSORS.containsKey(cursorType)) return CEF_TO_GLFW_CURSORS.get(cursorType);
-        long glfwCursorHandle = GLFW.glfwCreateStandardCursor(cursorType.glfwId);
-        if (glfwCursorHandle == 0L) {
-            // Fallback to OS default cursor if GLFW can't create the requested cursor.
-            return 0L;
-        }
-        CEF_TO_GLFW_CURSORS.put(cursorType, glfwCursorHandle);
-        return glfwCursorHandle;
     }
 
 }

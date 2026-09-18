@@ -1,5 +1,6 @@
 package de.keksuccino.rinku.example;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import de.keksuccino.rinku.Rinku;
 import de.keksuccino.rinku.RinkuBrowser;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -18,7 +19,9 @@ import org.cef.browser.CefFrame;
 import org.cef.handler.CefDisplayHandler;
 import org.cef.handler.CefDisplayHandlerAdapter;
 import org.jetbrains.annotations.NotNull;
-import org.lwjgl.glfw.GLFW;
+
+import java.util.HashSet;
+import java.util.Set;
 
 public class ExampleScreen extends Screen {
 
@@ -38,6 +41,7 @@ public class ExampleScreen extends Screen {
     private Button forwardButton;
     private Button reloadButton;
     private CefDisplayHandler addressBarDisplayHandler;
+    private final Set<Integer> pressedBrowserButtons = new HashSet<>();
 
     public ExampleScreen(Component component) {
         super(component);
@@ -286,6 +290,7 @@ public class ExampleScreen extends Screen {
     public boolean mouseClicked(MouseButtonEvent event, boolean isDoubleClick) {
         boolean handled = super.mouseClicked(event, isDoubleClick);
         if (handled) {
+            browser.setFocus(false);
             return true;
         }
 
@@ -293,20 +298,19 @@ public class ExampleScreen extends Screen {
             return false;
         }
 
-        browser.sendMousePress(mouseX(event.x()), mouseY(event.y()), event.button());
+        setFocused(null);
         browser.setFocus(true);
+        browser.sendMousePress(mouseX(event.x()), mouseY(event.y()), event.button());
+        pressedBrowserButtons.add(event.button());
         return true;
     }
 
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
-        boolean handled = super.mouseReleased(event);
-        if (handled) {
-            return true;
-        }
-
+        // A URL-field release must not take SDL text ownership back from the EditBox. A browser drag,
+        // however, still needs its release even when the pointer has moved outside the browser area.
+        if (!pressedBrowserButtons.remove(event.button())) return super.mouseReleased(event);
         browser.sendMouseRelease(mouseX(event.x()), mouseY(event.y()), event.button());
-        browser.setFocus(true);
         return true;
     }
 
@@ -340,7 +344,7 @@ public class ExampleScreen extends Screen {
 
     @Override
     public boolean keyPressed(KeyEvent event) {
-        if (urlBox != null && urlBox.isFocused() && (event.key() == GLFW.GLFW_KEY_ENTER || event.key() == GLFW.GLFW_KEY_KP_ENTER)) {
+        if (urlBox != null && urlBox.isFocused() && (event.key() == InputConstants.KEY_RETURN || event.key() == InputConstants.KEY_NUMPADENTER)) {
             navigateFromUrlField();
             setFocused(null);
             browser.setFocus(true);
@@ -355,7 +359,7 @@ public class ExampleScreen extends Screen {
             return true;
         }
 
-        browser.sendKeyPress(event.key(), event.scancode(), event.modifiers());
+        browser.sendKeyPress(event);
         browser.setFocus(true);
         return true;
     }
@@ -370,7 +374,7 @@ public class ExampleScreen extends Screen {
             return true;
         }
 
-        browser.sendKeyRelease(event.key(), event.scancode(), event.modifiers());
+        browser.sendKeyRelease(event);
         browser.setFocus(true);
         return true;
     }
