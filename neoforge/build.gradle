@@ -50,13 +50,6 @@ tasks.named("verifyJcefPackaging").configure {
     dependsOn(finalJarJar)
 }
 
-subsystems {
-    parchment {
-        minecraftVersion = "${parchment_mc_version}"
-        mappingsVersion = "${parchment_version}"
-    }
-}
-
 dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.2")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.2")
@@ -66,15 +59,6 @@ dependencies {
 //        jarJar.ranged(it, "[317b2cb6e5,)")
 //    }
     compileOnly project(":common")
-}
-
-// Exclude Fabric Loader from NeoForge
-configurations {
-    runtimeClasspath    { exclude group: 'net.fabricmc', module: 'fabric-loader' }
-    developmentRuntimeClasspath {
-        // Gradle 8 names used by ForgeGradle 6
-        exclude group: 'net.fabricmc', module: 'fabric-loader'
-    }
 }
 
 // Exclude Fabric Loader from NeoForge
@@ -114,8 +98,8 @@ tasks.withType(ProcessResources).matching(notNeoTask).configureEach {
 publishing {
     publications {
         mavenJava(MavenPublication) {
-            artifactId "${mod_id}-neoforge"
-            version "${mod_version}-${minecraft_version}"
+            artifactId = "${mod_id}-neoforge"
+            version = "${mod_version}-${minecraft_version}"
             from components.java
             pom.withXml {
                 def deps = asNode().get('dependencies')
@@ -127,7 +111,7 @@ publishing {
     }
     repositories {
         maven {
-            url "file://" + System.getenv("local_maven")
+            url = "file://" + System.getenv("local_maven")
         }
     }
 }

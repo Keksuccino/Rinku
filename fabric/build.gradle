@@ -15,12 +15,12 @@ dependencies {
     minecraft "com.mojang:minecraft:${minecraft_version}"
     implementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
     implementation "net.fabricmc.fabric-api:fabric-api:${fabric_version}"
-    implementation group: 'com.google.code.findbugs', name: 'jsr305', version: '3.0.1'
+    implementation "com.google.code.findbugs:jsr305:3.0.2"
     implementation project(":common")
     include(implementation(annotationProcessor("io.github.llamalad7:mixinextras-fabric:${mixin_extras_version}")))
-    implementation "maven.modrinth:modmenu:20.0.0-beta.4"
-    runtimeOnly "maven.modrinth:sodium:mc26.2-0.9.1-fabric"
-    runtimeOnly "maven.modrinth:iris:1.11.2+26.2-fabric"
+    implementation "maven.modrinth:modmenu:${modmenu_version}"
+    runtimeOnly "maven.modrinth:sodium:${sodium_version}"
+    runtimeOnly "maven.modrinth:iris:${iris_version}"
     testImplementation "org.junit.jupiter:junit-jupiter-api:5.10.2"
     testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:5.10.2"
     testRuntimeOnly "org.junit.platform:junit-platform-launcher:1.10.2"
@@ -50,6 +50,9 @@ loom {
     }
 }
 
+// Run existing shared tests through Fabric alongside loader-specific tests.
+sourceSets.test.java.srcDirs(project(":common").sourceSets.test.java.srcDirs)
+
 tasks.named("compileJava", JavaCompile).configure {
     source(project(":common").sourceSets.main.allSource)
     dependsOn(project(":common").tasks.named("generateJcefRuntimeIdentity"))
@@ -74,8 +77,8 @@ processResources {
 publishing {
     publications {
         mavenJava(MavenPublication) {
-            artifactId "${mod_id}-fabric"
-            version "${mod_version}-${minecraft_version}"
+            artifactId = "${mod_id}-fabric"
+            version = "${mod_version}-${minecraft_version}"
             from components.java
             pom.withXml {
                 def deps = asNode().get('dependencies')
@@ -87,7 +90,7 @@ publishing {
     }
     repositories {
         maven {
-            url "file://" + System.getenv("local_maven")
+            url = "file://" + System.getenv("local_maven")
         }
     }
 }

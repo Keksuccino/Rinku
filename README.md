@@ -30,11 +30,11 @@ repositories {
 }
 
 dependencies {
-    modImplementation "de.keksuccino:rinku-fabric:3.0.0-26.2"
+    implementation "de.keksuccino:rinku-fabric:3.0.4-26.3"
 }
 ```
 
-Replace the Rinku and Minecraft version as required. `modImplementation` makes Rinku available in dev.
+Use a published Rinku version for your target Minecraft version. The coordinates above describe this branch's target artifact and become available after publication. Minecraft 26.3 uses unobfuscated Loom, so use `implementation` to make Rinku available in development.
 
 ### NeoForge
 
@@ -44,13 +44,15 @@ repositories {
 }
 
 dependencies {
-    implementation "de.keksuccino:rinku-neoforge:3.0.0-26.2"
+    implementation "de.keksuccino:rinku-neoforge:3.0.4-26.3"
 }
 ```
 
 NeoForge ships deobfuscated jars by default, so the dependency can be declared with a plain `implementation`. Replace the Rinku and Minecraft version as required.
 
 ## Building & Modifying Rinku
+
+This branch targets Minecraft 26.3 with Java 25. Use the included Gradle 9.7.1 wrapper. The build configuration is prepared for 26.3; the Java code port is still pending.
 
 The build resolves the JCEF Java binary and source JARs from the `Keksuccino/jcef-rinku` GitHub release selected by `jcef_commit` in `gradle.properties`; no submodule checkout is required. When updating JCEF, select a lowercase 40-character commit that has a matching `java-cef-<commit>` release containing both `jcef-rinku.jar` and `jcef-rinku-sources.jar`. The same compiled identity selects the matching native runtime release. JCEF classes are flat-merged into Rinku binaries and the upstream source classifier is flat-merged into every Rinku sources JAR, so published metadata needs no transitive JCEF dependency and consumers still receive JCEF sources.
 
