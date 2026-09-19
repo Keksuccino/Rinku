@@ -16,7 +16,7 @@ public final class Rinku {
 
     private static final Logger LOGGER = LogUtils.getLogger();
     public static final String MOD_ID = "rinku";
-    public static final String VERSION = "3.0.4";
+    public static final String VERSION = "3.0.5";
 
     private static final RinkuInitializationController INITIALIZATION_CONTROLLER = new RinkuInitializationController();
     private static final ArrayList<RinkuInitListener> awaitingInit = new ArrayList<>();
