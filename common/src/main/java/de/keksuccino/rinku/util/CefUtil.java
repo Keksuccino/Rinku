@@ -3,9 +3,11 @@ package de.keksuccino.rinku.util;
 import de.keksuccino.rinku.OSPlatform;
 import de.keksuccino.rinku.Rinku;
 import de.keksuccino.rinku.RinkuSettings;
+import com.mojang.blaze3d.systems.RenderSystem;
 import org.cef.CefApp;
 import org.cef.CefClient;
 import org.cef.CefSettings;
+import org.lwjgl.sdl.SDLEvents;
 import org.slf4j.Logger;
 import com.mojang.logging.LogUtils;
 
@@ -19,6 +21,11 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.LockSupport;
+import java.util.function.BooleanSupplier;
+import java.util.function.LongConsumer;
+import java.util.function.LongSupplier;
 
 /**
  * This class mostly just interacts with org.cef.* for internal use in {@link Rinku}.
@@ -152,6 +159,45 @@ public final class CefUtil {
             init = false;
             cefClientInstance.dispose();
             cefAppInstance.dispose();
+        }
+    }
+
+    /** Completes asynchronous macOS disposal before Minecraft destroys SDL and leaves AppKit main. */
+    public static void finishShutdownOnRenderThread() {
+        RenderSystem.assertOnRenderThread();
+        if (!OSPlatform.getPlatform().isMacOS() || CefApp.getState() != CefApp.CefAppState.SHUTTING_DOWN) {
+            return;
+        }
+
+        // JCEF's shutdown worker synchronously dispatches CefShutdown to AppKit main, which is
+        // Minecraft's render thread with -XstartOnFirstThread. Joining that worker, or returning
+        // from main before it finishes, deadlocks. Keep AppKit servicing its queued selectors
+        // through SDL, without dispatching more Minecraft input or holding Rinku lifecycle locks.
+        boolean terminated = awaitTermination(() -> CefApp.getState() == CefApp.CefAppState.TERMINATED, SDLEvents::SDL_PumpEvents, System::nanoTime, LockSupport::parkNanos, TimeUnit.SECONDS.toNanos(10));
+        if (!terminated) {
+            LOGGER.warn("CEF did not finish macOS shutdown within 10 seconds; current state: {}", CefApp.getState());
+        }
+    }
+
+    static boolean awaitTermination(BooleanSupplier terminated, Runnable pumpEvents, LongSupplier nanoTime, LongConsumer pause, long timeoutNanos) {
+        long started = nanoTime.getAsLong();
+        boolean interrupted = Thread.interrupted();
+        try {
+            while (!terminated.getAsBoolean()) {
+                long remaining = timeoutNanos - (nanoTime.getAsLong() - started);
+                if (remaining <= 0) return false;
+                pumpEvents.run();
+                if (terminated.getAsBoolean()) return true;
+                remaining = timeoutNanos - (nanoTime.getAsLong() - started);
+                if (remaining <= 0) return false;
+                // Preserve interruption without letting parkNanos turn this into a busy loop.
+                interrupted |= Thread.interrupted();
+                pause.accept(Math.min(remaining, TimeUnit.MILLISECONDS.toNanos(1)));
+                interrupted |= Thread.interrupted();
+            }
+            return true;
+        } finally {
+            if (interrupted) Thread.currentThread().interrupt();
         }
     }
 

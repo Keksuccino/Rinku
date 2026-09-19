@@ -82,10 +82,9 @@ public final class Rinku {
                     if (platform.isLinux() || platform.isWindows()) {
                         Runtime.getRuntime().addShutdownHook(new Thread(Rinku::shutdown, "Rinku-Shutdown"));
                     } else if (platform.isMacOS()) {
-                        CefUtil.getCefApp().macOSTerminationRequestRunnable = () -> {
-                            shutdown();
-                            Minecraft.getInstance().stop();
-                        };
+                        // Cmd+Q arrives inside an AppKit event callback. Leave that stack before
+                        // closing CEF; Minecraft.close owns browser cleanup and native termination.
+                        CefUtil.getCefApp().macOSTerminationRequestRunnable = () -> Minecraft.getInstance().stop();
                     }
 
                     return true;

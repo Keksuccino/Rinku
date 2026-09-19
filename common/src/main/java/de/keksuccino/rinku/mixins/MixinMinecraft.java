@@ -3,6 +3,7 @@ package de.keksuccino.rinku.mixins;
 import de.keksuccino.rinku.Rinku;
 import de.keksuccino.rinku.OSPlatform;
 import de.keksuccino.rinku.RinkuRenderCoordinator;
+import de.keksuccino.rinku.util.CefUtil;
 import net.minecraft.client.Minecraft;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -22,6 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 @Mixin(Minecraft.class)
 public abstract class MixinMinecraft {
+
     @Unique
     private static final Logger LOGGER_RINKU = LogUtils.getLogger();
 
@@ -39,6 +41,7 @@ public abstract class MixinMinecraft {
     private void before_close_RINKU(CallbackInfo info) {
         RinkuRenderCoordinator.shutdownOnRenderThread();
         Rinku.shutdown();
+        CefUtil.finishShutdownOnRenderThread();
     }
 
     /**
